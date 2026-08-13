@@ -104,6 +104,7 @@ class _MapScreenState extends State<MapScreen> {
 
   // AMPM overlay colors — deliberately distinct from node/contact markers.
   static const Color _gpsTrackColor = Color(0xFF00B8D4); // cyan
+  static const Color _gpsTrackStartColor = Color(0xFF2E7D32); // green
   static const Color _flockYouColor = Color(0xFFD32F2F); // red
 
   /// If the GPS-track / FlockYou overlays were left enabled, pull their data
@@ -125,6 +126,39 @@ class _MapScreenState extends State<MapScreen> {
         !ampm.isLoadingFlockYou) {
       ampm.fetchFlockYouDetections();
     }
+  }
+
+  /// Start (green ▶) and end (cyan ⚑) pins for the track. For a stationary
+  /// track the two coincide, leaving a single visible dot where a zero-length
+  /// polyline would show nothing.
+  List<Marker> _buildGpsTrackEndpointMarkers(List<LatLng> points) {
+    Marker pin(LatLng p, Color color, IconData icon) => Marker(
+      point: p,
+      width: 28,
+      height: 28,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(color: MapPalette.markerOutline, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: MapPalette.markerShadow,
+                blurRadius: 5,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: Colors.white, size: 15),
+        ),
+      ),
+    );
+    return [
+      pin(points.first, _gpsTrackStartColor, Icons.play_arrow),
+      pin(points.last, _gpsTrackColor, Icons.flag),
+    ];
   }
 
   List<Marker> _buildFlockYouMarkers(List<FlockYouDetection> detections) {
@@ -921,6 +955,10 @@ class _MapScreenState extends State<MapScreen> {
                             color: _gpsTrackColor,
                           ),
                         ],
+                      ),
+                    if (gpsTrackPoints.isNotEmpty)
+                      MarkerLayer(
+                        markers: _buildGpsTrackEndpointMarkers(gpsTrackPoints),
                       ),
                     MarkerLayer(
                       markers: [

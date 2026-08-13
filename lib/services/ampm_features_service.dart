@@ -134,8 +134,9 @@ class AmpmFeaturesService extends ChangeNotifier {
     try {
       final out = <FlockYouDetection>[];
       int idx = 0;
-      // Guard against a misbehaving device looping forever.
-      for (int page = 0; page < 256; page++) {
+      // Guard against a misbehaving device looping forever. Detection index is
+      // a single byte on the wire (idx & 0xFF), so the table is capped at 255.
+      for (int page = 0; page < 512; page++) {
         final cmd = Uint8List.fromList([cmdFlockYouListChunk, idx & 0xFF]);
         final resp = await _sendAndAwait(cmd, respCodeFlockYouListChunk);
         if (resp == null || resp.length < 3) break;
@@ -143,12 +144,17 @@ class AmpmFeaturesService extends ChangeNotifier {
         r.skipBytes(1); // response code
         final returned = r.readUInt8();
         final hasMore = r.readUInt8() != 0;
+        // A truncated BLE frame (see _readChunk) may carry fewer than `returned`
+        // whole records, so advance by what we actually parsed and re-request.
+        int parsed = 0;
         for (int i = 0; i < returned; i++) {
           if (r.remaining < FlockYouDetection.wireSize) break;
           out.add(FlockYouDetection.fromReader(r));
+          parsed++;
         }
-        idx += returned;
-        if (!hasMore || returned == 0) break;
+        if (parsed == 0) break;
+        idx += parsed;
+        if (!hasMore && parsed >= returned) break;
       }
       _flockYouDetections = out;
       _flockYouWithLocation =
@@ -209,7 +215,11 @@ class AmpmFeaturesService extends ChangeNotifier {
       }
       final fixes = <GpsFix>[];
       for (int c = 0; c < status.chunks.length; c++) {
-        final bytes = await _readChunk(status.chunks[c].chunkId);
+        final chunk = status.chunks[c];
+        final bytes = await _readChunk(
+          chunk.chunkId,
+          chunk.fixCount * GpsFix.wireSize,
+        );
         final r = BufferReader(bytes);
         final n = bytes.length ~/ GpsFix.wireSize;
         for (int i = 0; i < n; i++) {
@@ -259,11 +269,23 @@ class AmpmFeaturesService extends ChangeNotifier {
   }
 
   /// Pulls one chunk fully by paging CMD_GPS_TRACK_DOWNLOAD_CHUNK from offset 0.
-  /// Response: [code][u16 got][u8 has_more][got bytes].
-  Future<Uint8List> _readChunk(int chunkId) async {
+  /// Response: [code][u16 got][u8 has_more][data]. `expectedBytes` is the chunk
+  /// size from the index (fixCount × 16).
+  ///
+  /// Note: the transport may deliver fewer data bytes than `got` claims — over
+  /// BLE the firmware's page (up to MAX_FRAME_SIZE = 176 B) can exceed the
+  /// negotiated ATT MTU and arrive truncated, with no reassembly on the receive
+  /// side. So we advance by the bytes *actually present*, not the claimed
+  /// count, and re-request from the true offset (the firmware re-seeks per
+  /// request). That reads the whole chunk in MTU-sized contiguous slices and is
+  /// a no-op over USB/TCP where the frame arrives intact (actual == got).
+  Future<Uint8List> _readChunk(int chunkId, int expectedBytes) async {
     final buf = BytesBuilder();
     int offset = 0;
-    for (int page = 0; page < 65536; page++) {
+    // Bound the loop generously; at the worst case (~20-byte MTU slices) a large
+    // chunk still finishes well under this.
+    for (int page = 0; page < 100000; page++) {
+      if (expectedBytes > 0 && buf.length >= expectedBytes) break;
       final w = BufferWriter()
         ..writeByte(cmdGpsTrackDownloadChunk)
         ..writeUInt32LE(chunkId)
@@ -272,13 +294,15 @@ class AmpmFeaturesService extends ChangeNotifier {
       if (resp == null || resp.length < 4) break;
       final r = BufferReader(resp);
       r.skipBytes(1); // response code
-      final got = r.readUInt16LE();
+      final claimed = r.readUInt16LE();
       final hasMore = r.readUInt8() != 0;
-      if (got > 0 && r.remaining >= got) {
-        buf.add(r.readBytes(got));
-      }
-      offset += got;
-      if (!hasMore || got == 0) break;
+      final actual = r.remaining; // bytes truly present (< claimed if truncated)
+      if (actual <= 0) break;
+      buf.add(r.readBytes(actual));
+      offset += actual;
+      // When the size is unknown, fall back to the device's has_more, but only
+      // trust it once we've received the page it claims to have sent in full.
+      if (expectedBytes <= 0 && !hasMore && actual >= claimed) break;
     }
     return buf.toBytes();
   }
