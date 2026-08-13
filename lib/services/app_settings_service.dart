@@ -109,43 +109,12 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(enableMessageTracing: value));
   }
 
-  Future<void> setMapCacheBounds(Map<String, double>? value) async {
-    await updateSettings(_settings.copyWith(mapCacheBounds: value));
-  }
-
-  Future<void> setMapCacheZoomRange(int minZoom, int maxZoom) async {
-    final safeMin = minZoom <= maxZoom ? minZoom : maxZoom;
-    final safeMax = minZoom <= maxZoom ? maxZoom : minZoom;
-    await updateSettings(
-      _settings.copyWith(mapCacheMinZoom: safeMin, mapCacheMaxZoom: safeMax),
-    );
-  }
-
-  Future<void> setMapRasterSourceId(String value) async {
-    await updateSettings(_settings.copyWith(mapRasterSourceId: value));
-  }
-
-  Future<void> setMapVectorEnabled(bool value) async {
-    await updateSettings(_settings.copyWith(mapVectorEnabled: value));
-  }
-
   Future<void> setMapVectorTilesUrl(String value) async {
     await updateSettings(_settings.copyWith(mapVectorTilesUrl: value.trim()));
   }
 
-  Future<void> setMapTileEndpointId(String value) async {
-    await updateSettings(_settings.copyWith(mapTileEndpointId: value));
-  }
-
-  Future<void> setMapTileApiKey(String? value) async {
-    final normalized = value?.trim();
-    await updateSettings(
-      _settings.copyWith(
-        mapTileApiKey: (normalized == null || normalized.isEmpty)
-            ? null
-            : normalized,
-      ),
-    );
+  Future<void> setMapVectorUseOffline(bool value) async {
+    await updateSettings(_settings.copyWith(mapVectorUseOffline: value));
   }
 
   Future<void> setNotificationsEnabled(bool value) async {

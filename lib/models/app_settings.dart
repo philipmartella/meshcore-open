@@ -77,7 +77,6 @@ class Cyr2LatProfile {
 
 class AppSettings {
   static const Object _unset = Object();
-  static const String stadiaDemo = '51bd0381-4685-4666-bae8-48940f6d77c0';
 
   final bool clearPathOnMaxRetry;
   final bool mapShowRepeaters;
@@ -90,17 +89,12 @@ class AppSettings {
   final bool mapShowMarkers;
   final bool mapShowGuessedLocations;
   final bool enableMessageTracing;
-  final Map<String, double>? mapCacheBounds;
-  final int mapCacheMinZoom;
-  final int mapCacheMaxZoom;
-  final String mapRasterSourceId;
-  final String mapTileEndpointId;
-  final String? mapTileApiKey;
-  // Vector basemap (Path A): opt-in switch + the PMTiles archive URL served
-  // over HTTP range. When enabled, MapTileCacheService renders a VectorTileLayer
-  // instead of the raster TileLayer. See pmtiles_vector_tile_provider.dart.
-  final bool mapVectorEnabled;
+  // Vector basemap (the only basemap): PMTiles archive URL served over HTTP
+  // range. See MapTileCacheService / pmtiles_vector_tile_provider.dart.
   final String mapVectorTilesUrl;
+  // When true and a local archive has been downloaded, the basemap reads the
+  // offline PMTiles file instead of the URL. See MapTileCacheService.
+  final bool mapVectorUseOffline;
   final bool notificationsEnabled;
   final bool notifyOnNewMessage;
   final bool notifyOnNewChannelMessage;
@@ -167,15 +161,6 @@ class AppSettings {
     downloadedModels: imageCodecDownloadedModels,
   );
 
-  String get effectiveMapTileApiKey {
-    final apiKey = mapTileApiKey?.trim();
-    if (apiKey == null || apiKey.isEmpty) {
-      return stadiaDemo;
-    }
-    return apiKey;
-  }
-
-  bool get usesstadiaDemo => effectiveMapTileApiKey == stadiaDemo;
 
   Map<String, String> get cyr2latCharMap {
     final profile = cyr2latProfiles.firstWhere(
@@ -197,15 +182,9 @@ class AppSettings {
     this.mapShowMarkers = true,
     this.mapShowGuessedLocations = true,
     this.enableMessageTracing = true,
-    this.mapCacheBounds,
-    this.mapCacheMinZoom = 10,
-    this.mapCacheMaxZoom = 15,
-    this.mapRasterSourceId = 'osm_auto',
-    this.mapTileEndpointId = 'standard_2x',
-    this.mapTileApiKey,
-    this.mapVectorEnabled = false,
     this.mapVectorTilesUrl =
         'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
+    this.mapVectorUseOffline = false,
     this.notificationsEnabled = true,
     this.notifyOnNewMessage = true,
     this.notifyOnNewChannelMessage = true,
@@ -274,14 +253,8 @@ class AppSettings {
       'map_show_markers': mapShowMarkers,
       'map_show_guessed_locations': mapShowGuessedLocations,
       'enable_message_tracing': enableMessageTracing,
-      'map_cache_bounds': mapCacheBounds,
-      'map_cache_min_zoom': mapCacheMinZoom,
-      'map_cache_max_zoom': mapCacheMaxZoom,
-      'map_raster_source_id': mapRasterSourceId,
-      'map_tile_endpoint_id': mapTileEndpointId,
-      'map_tile_api_key': mapTileApiKey,
-      'map_vector_enabled': mapVectorEnabled,
       'map_vector_tiles_url': mapVectorTilesUrl,
+      'map_vector_use_offline': mapVectorUseOffline,
       'notifications_enabled': notificationsEnabled,
       'notify_on_new_message': notifyOnNewMessage,
       'notify_on_new_channel_message': notifyOnNewChannelMessage,
@@ -353,18 +326,10 @@ class AppSettings {
       mapShowGuessedLocations:
           json['map_show_guessed_locations'] as bool? ?? true,
       enableMessageTracing: json['enable_message_tracing'] as bool? ?? true,
-      mapCacheBounds: (json['map_cache_bounds'] as Map?)?.map(
-        (key, value) => MapEntry(key.toString(), (value as num).toDouble()),
-      ),
-      mapCacheMinZoom: json['map_cache_min_zoom'] as int? ?? 10,
-      mapCacheMaxZoom: json['map_cache_max_zoom'] as int? ?? 15,
-      mapRasterSourceId: json['map_raster_source_id'] as String? ?? 'osm_auto',
-      mapTileEndpointId: json['map_tile_endpoint_id'] as String? ?? 'standard',
-      mapTileApiKey: json['map_tile_api_key'] as String?,
-      mapVectorEnabled: json['map_vector_enabled'] as bool? ?? false,
       mapVectorTilesUrl:
           json['map_vector_tiles_url'] as String? ??
           'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
+      mapVectorUseOffline: json['map_vector_use_offline'] as bool? ?? false,
       notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
       notifyOnNewMessage: json['notify_on_new_message'] as bool? ?? true,
       notifyOnNewChannelMessage:
@@ -492,14 +457,8 @@ class AppSettings {
     bool? mapShowMarkers,
     bool? mapShowGuessedLocations,
     bool? enableMessageTracing,
-    Object? mapCacheBounds = _unset,
-    int? mapCacheMinZoom,
-    int? mapCacheMaxZoom,
-    String? mapRasterSourceId,
-    String? mapTileEndpointId,
-    Object? mapTileApiKey = _unset,
-    bool? mapVectorEnabled,
     String? mapVectorTilesUrl,
+    bool? mapVectorUseOffline,
     bool? notificationsEnabled,
     bool? notifyOnNewMessage,
     bool? notifyOnNewChannelMessage,
@@ -553,18 +512,8 @@ class AppSettings {
       mapShowGuessedLocations:
           mapShowGuessedLocations ?? this.mapShowGuessedLocations,
       enableMessageTracing: enableMessageTracing ?? this.enableMessageTracing,
-      mapCacheBounds: mapCacheBounds == _unset
-          ? this.mapCacheBounds
-          : mapCacheBounds as Map<String, double>?,
-      mapCacheMinZoom: mapCacheMinZoom ?? this.mapCacheMinZoom,
-      mapCacheMaxZoom: mapCacheMaxZoom ?? this.mapCacheMaxZoom,
-      mapRasterSourceId: mapRasterSourceId ?? this.mapRasterSourceId,
-      mapTileEndpointId: mapTileEndpointId ?? this.mapTileEndpointId,
-      mapTileApiKey: mapTileApiKey == _unset
-          ? this.mapTileApiKey
-          : mapTileApiKey as String?,
-      mapVectorEnabled: mapVectorEnabled ?? this.mapVectorEnabled,
       mapVectorTilesUrl: mapVectorTilesUrl ?? this.mapVectorTilesUrl,
+      mapVectorUseOffline: mapVectorUseOffline ?? this.mapVectorUseOffline,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       notifyOnNewMessage: notifyOnNewMessage ?? this.notifyOnNewMessage,
       notifyOnNewChannelMessage:

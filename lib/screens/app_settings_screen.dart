@@ -10,7 +10,6 @@ import '../models/image_codec_support.dart';
 import '../models/translation_support.dart';
 import '../services/app_settings_service.dart';
 import '../services/image_codec_service.dart';
-import '../services/map_tile_cache_service.dart';
 import '../services/notification_service.dart';
 import '../services/translation_service.dart';
 import '../theme/mesh_theme.dart';
@@ -1055,12 +1054,7 @@ class AppSettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      settingsService.settings.mapCacheBounds == null
-                          ? context.l10n.appSettings_noAreaSelected
-                          : context.l10n.appSettings_areaSelectedZoom(
-                              settingsService.settings.mapCacheMinZoom,
-                              settingsService.settings.mapCacheMaxZoom,
-                            ),
+                      'Download the vector basemap for offline use',
                       style: textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -1077,92 +1071,11 @@ class AppSettingsScreen extends StatelessWidget {
           ),
         ),
       ),
+      // AMPM: vector basemap (PMTiles) — the only basemap. Plain strings for
+      // now (beta feature, not yet localized into the ARB set).
       const Divider(height: 1, indent: 16),
       InkWell(
-        onTap: () => _showMapRasterSourceDialog(context, settingsService),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Icon(
-                Icons.layers_outlined,
-                size: 20,
-                color: scheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.l10n.appSettings_rasterTileSource,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _mapRasterSourceSummary(settingsService.settings),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: scheme.onSurfaceVariant,
-                size: 16,
-              ),
-            ],
-          ),
-        ),
-      ),
-      // AMPM: vector basemap (PMTiles). Plain strings for now — beta feature,
-      // not yet localized into the ARB set.
-      const Divider(height: 1, indent: 16),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        child: Row(
-          children: [
-            Icon(Icons.map_outlined, size: 20, color: scheme.onSurfaceVariant),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Vector basemap (beta)',
-                    style: textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Render the self-hosted PMTiles vector map instead of '
-                    'raster tiles',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Switch(
-              value: settingsService.settings.mapVectorEnabled,
-              onChanged: (value) =>
-                  settingsService.setMapVectorEnabled(value),
-            ),
-          ],
-        ),
-      ),
-      if (settingsService.settings.mapVectorEnabled) ...[
-        const Divider(height: 1, indent: 16),
-        InkWell(
-          onTap: () => _showVectorTilesUrlDialog(context, settingsService),
+        onTap: () => _showVectorTilesUrlDialog(context, settingsService),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -1204,242 +1117,8 @@ class AppSettingsScreen extends StatelessWidget {
             ),
           ),
         ),
-      ],
     ];
-
-    if (_isStadiaSource(settingsService.settings)) {
-      children.addAll([
-        const Divider(height: 1, indent: 16),
-        InkWell(
-          onTap: () => _showMapRasterEndpointDialog(context, settingsService),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.public_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.l10n.appSettings_stadiaEndpoint,
-                        style: textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _mapRasterEndpointSummary(settingsService.settings),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: scheme.onSurfaceVariant,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const Divider(height: 1, indent: 16),
-        InkWell(
-          onTap: () => _showMapApiKeyDialog(context, settingsService),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.key_outlined,
-                  size: 20,
-                  color: scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.l10n.appSettings_stadiaApiKey,
-                        style: textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _mapApiKeySummary(context, settingsService.settings),
-                        style: textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: scheme.onSurfaceVariant,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ]);
-    }
-
     return Column(children: children);
-  }
-
-  String _mapRasterSourceSummary(AppSettings settings) {
-    final source = MapRasterSourceCatalog.fromSettings(settings);
-    return '${source.label} - ${source.description}';
-  }
-
-  bool _isStadiaSource(AppSettings settings) {
-    return MapRasterSourceCatalog.fromSettings(settings).isStadia;
-  }
-
-  String _mapRasterEndpointSummary(AppSettings settings) {
-    final endpoint = MapRasterEndpointCatalog.fromSettings(settings);
-    return '${endpoint.label} - ${endpoint.description}';
-  }
-
-  String _mapApiKeySummary(BuildContext context, AppSettings settings) {
-    return context.l10n.appSettings_stadiaApiKeyConfigured(
-      _maskApiKey(settings.effectiveMapTileApiKey),
-    );
-  }
-
-  String _maskApiKey(String value) {
-    if (value.length <= 8) return '********';
-    return '${value.substring(0, 4)}...${value.substring(value.length - 4)}';
-  }
-
-  void _showMapRasterSourceDialog(
-    BuildContext context,
-    AppSettingsService settingsService,
-  ) {
-    String selectedId = settingsService.settings.mapRasterSourceId;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setState) => AlertDialog(
-          title: Text(context.l10n.appSettings_rasterTileSource),
-          content: SizedBox(
-            width: 360,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(dialogContext).size.height * 0.6,
-              ),
-              child: SingleChildScrollView(
-                child: RadioGroup<String>(
-                  groupValue: selectedId,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() {
-                      selectedId = value;
-                    });
-                  },
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final preset in MapRasterSourcePreset.values)
-                        Builder(
-                          builder: (context) {
-                            final option = MapRasterSourceCatalog.fromPreset(
-                              preset,
-                            );
-                            return RadioListTile<String>(
-                              value: preset.id,
-                              title: Text(option.label),
-                              subtitle: Text(option.description),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(context.l10n.common_cancel),
-            ),
-            TextButton(
-              onPressed: () async {
-                await settingsService.setMapRasterSourceId(selectedId);
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-              },
-              child: Text(context.l10n.common_save),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showMapRasterEndpointDialog(
-    BuildContext context,
-    AppSettingsService settingsService,
-  ) {
-    String selectedId = settingsService.settings.mapTileEndpointId;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setState) => AlertDialog(
-          title: Text(context.l10n.appSettings_stadiaEndpoint),
-          content: SizedBox(
-            width: 360,
-            child: RadioGroup<String>(
-              groupValue: selectedId,
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  selectedId = value;
-                });
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final option in MapRasterEndpointCatalog.presets)
-                    RadioListTile<String>(
-                      value: option.id,
-                      title: Text(option.label),
-                      subtitle: Text(option.description),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: Text(context.l10n.common_cancel),
-            ),
-            TextButton(
-              onPressed: () async {
-                await settingsService.setMapTileEndpointId(selectedId);
-                if (!dialogContext.mounted) return;
-                Navigator.pop(dialogContext);
-              },
-              child: Text(context.l10n.common_save),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showVectorTilesUrlDialog(
@@ -1489,62 +1168,6 @@ class AppSettingsScreen extends StatelessWidget {
               if (url.isNotEmpty) {
                 await settingsService.setMapVectorTilesUrl(url);
               }
-              if (!dialogContext.mounted) return;
-              Navigator.pop(dialogContext);
-            },
-            child: Text(context.l10n.common_save),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showMapApiKeyDialog(
-    BuildContext context,
-    AppSettingsService settingsService,
-  ) {
-    final currentApiKey = settingsService.settings.mapTileApiKey?.trim() ?? '';
-    final maskedApiKey = _maskApiKey(
-      currentApiKey.isEmpty ? AppSettings.stadiaDemo : currentApiKey,
-    );
-    final controller = TextEditingController(text: maskedApiKey);
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.appSettings_stadiaApiKey),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.l10n.appSettings_stadiaApiKeyDialogDescription),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                autocorrect: false,
-                enableSuggestions: false,
-                autofillHints: const [AutofillHints.password],
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: '4e1bf343-3d91-4d9c-a8e1-1234567890ab',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(context.l10n.common_cancel),
-          ),
-          TextButton(
-            onPressed: () async {
-              final apiKey = controller.text.trim();
-              await settingsService.setMapTileApiKey(
-                apiKey == maskedApiKey ? currentApiKey : apiKey,
-              );
               if (!dialogContext.mounted) return;
               Navigator.pop(dialogContext);
             },
