@@ -105,6 +105,14 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(mapShowGuessedLocations: value));
   }
 
+  Future<void> setMapShowGpsTrack(bool value) async {
+    await updateSettings(_settings.copyWith(mapShowGpsTrack: value));
+  }
+
+  Future<void> setMapShowFlockYou(bool value) async {
+    await updateSettings(_settings.copyWith(mapShowFlockYou: value));
+  }
+
   Future<void> setEnableMessageTracing(bool value) async {
     await updateSettings(_settings.copyWith(enableMessageTracing: value));
   }

@@ -88,6 +88,11 @@ class AppSettings {
   final String mapKeyPrefix;
   final bool mapShowMarkers;
   final bool mapShowGuessedLocations;
+  // AMPM fork overlays: the downloaded GPS track (polyline) and FlockYou
+  // surveillance-camera detections (markers). Off by default — both pull data
+  // on demand from the connected device via AmpmFeaturesService.
+  final bool mapShowGpsTrack;
+  final bool mapShowFlockYou;
   final bool enableMessageTracing;
   // Vector basemap (the only basemap): PMTiles archive URL served over HTTP
   // range. See MapTileCacheService / pmtiles_vector_tile_provider.dart.
@@ -181,6 +186,8 @@ class AppSettings {
     this.mapKeyPrefix = '',
     this.mapShowMarkers = true,
     this.mapShowGuessedLocations = true,
+    this.mapShowGpsTrack = false,
+    this.mapShowFlockYou = false,
     this.enableMessageTracing = true,
     this.mapVectorTilesUrl =
         'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
@@ -252,6 +259,8 @@ class AppSettings {
       'map_key_prefix': mapKeyPrefix,
       'map_show_markers': mapShowMarkers,
       'map_show_guessed_locations': mapShowGuessedLocations,
+      'map_show_gps_track': mapShowGpsTrack,
+      'map_show_flockyou': mapShowFlockYou,
       'enable_message_tracing': enableMessageTracing,
       'map_vector_tiles_url': mapVectorTilesUrl,
       'map_vector_use_offline': mapVectorUseOffline,
@@ -325,6 +334,8 @@ class AppSettings {
       mapShowMarkers: json['map_show_markers'] as bool? ?? true,
       mapShowGuessedLocations:
           json['map_show_guessed_locations'] as bool? ?? true,
+      mapShowGpsTrack: json['map_show_gps_track'] as bool? ?? false,
+      mapShowFlockYou: json['map_show_flockyou'] as bool? ?? false,
       enableMessageTracing: json['enable_message_tracing'] as bool? ?? true,
       mapVectorTilesUrl:
           json['map_vector_tiles_url'] as String? ??
@@ -456,6 +467,8 @@ class AppSettings {
     String? mapKeyPrefix,
     bool? mapShowMarkers,
     bool? mapShowGuessedLocations,
+    bool? mapShowGpsTrack,
+    bool? mapShowFlockYou,
     bool? enableMessageTracing,
     String? mapVectorTilesUrl,
     bool? mapVectorUseOffline,
@@ -511,6 +524,8 @@ class AppSettings {
       mapShowMarkers: mapShowMarkers ?? this.mapShowMarkers,
       mapShowGuessedLocations:
           mapShowGuessedLocations ?? this.mapShowGuessedLocations,
+      mapShowGpsTrack: mapShowGpsTrack ?? this.mapShowGpsTrack,
+      mapShowFlockYou: mapShowFlockYou ?? this.mapShowFlockYou,
       enableMessageTracing: enableMessageTracing ?? this.enableMessageTracing,
       mapVectorTilesUrl: mapVectorTilesUrl ?? this.mapVectorTilesUrl,
       mapVectorUseOffline: mapVectorUseOffline ?? this.mapVectorUseOffline,

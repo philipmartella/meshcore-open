@@ -14,9 +14,11 @@ import '../connector/meshcore_connector.dart';
 import '../connector/meshcore_protocol.dart';
 import '../l10n/l10n.dart';
 import '../models/app_settings.dart';
+import '../models/ampm_features.dart';
 import '../models/channel.dart';
 import '../models/contact.dart';
 import '../l10n/contact_localization.dart';
+import '../services/ampm_features_service.dart';
 import '../services/app_settings_service.dart';
 import '../services/path_history_service.dart';
 import '../services/map_marker_service.dart';
@@ -100,6 +102,113 @@ class _MapScreenState extends State<MapScreen> {
   _NodeMarkersCacheKey? _nodeMarkersCacheKey;
   List<Marker> _cachedNodeMarkers = const [];
 
+  // AMPM overlay colors — deliberately distinct from node/contact markers.
+  static const Color _gpsTrackColor = Color(0xFF00B8D4); // cyan
+  static const Color _flockYouColor = Color(0xFFD32F2F); // red
+
+  /// If the GPS-track / FlockYou overlays were left enabled, pull their data
+  /// once the first frame is up (providers are available by then). The service
+  /// caches across tab switches, so this only actually fetches when empty.
+  void _autoFetchEnabledOverlays() {
+    if (!mounted) return;
+    final connector = context.read<MeshCoreConnector>();
+    if (!connector.isConnected) return;
+    final settings = context.read<AppSettingsService>().settings;
+    final ampm = context.read<AmpmFeaturesService>();
+    if (settings.mapShowGpsTrack &&
+        ampm.gpsTrackFixes.isEmpty &&
+        !ampm.isLoadingGpsTrack) {
+      ampm.fetchGpsTrack();
+    }
+    if (settings.mapShowFlockYou &&
+        ampm.flockYouDetections.isEmpty &&
+        !ampm.isLoadingFlockYou) {
+      ampm.fetchFlockYouDetections();
+    }
+  }
+
+  List<Marker> _buildFlockYouMarkers(List<FlockYouDetection> detections) {
+    return detections.map((d) {
+      return Marker(
+        point: d.location!,
+        width: 34,
+        height: 34,
+        child: GestureDetector(
+          onTap: () => _showFlockYouDetail(d),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _flockYouColor,
+              border: Border.all(color: MapPalette.markerOutline, width: 2),
+              boxShadow: const [
+                BoxShadow(
+                  color: MapPalette.markerShadow,
+                  blurRadius: 6,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: const Icon(Icons.videocam, color: Colors.white, size: 18),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  void _showFlockYouDetail(FlockYouDetection d) {
+    final scheme = Theme.of(context).colorScheme;
+    Widget row(String k, String v) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(
+              k,
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+            ),
+          ),
+          Expanded(child: Text(v, style: MeshTheme.mono(fontSize: 13))),
+        ],
+      ),
+    );
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.videocam, color: _flockYouColor),
+            SizedBox(width: 8),
+            Text('Detection'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            row('MAC', d.mac),
+            row('Signal', '${d.rssi} dBm'),
+            row('Channel', '${d.channel}'),
+            row('Seen', '${d.count}×'),
+            if (d.lat != null && d.lon != null)
+              row(
+                'Location',
+                '${d.lat!.toStringAsFixed(6)}, ${d.lon!.toStringAsFixed(6)}',
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -168,6 +277,7 @@ class _MapScreenState extends State<MapScreen> {
         if (widget.highlightPosition != null) {
           _mapController.move(widget.highlightPosition!, widget.highlightZoom);
         }
+        _autoFetchEnabledOverlays();
       }
     });
   }
@@ -354,6 +464,19 @@ class _MapScreenState extends State<MapScreen> {
         final settingsService = context.read<AppSettingsService>();
         final pathHistory = context.read<PathHistoryService>();
         final tileCache = context.read<MapTileCacheService>();
+        // AMPM overlays. select on the stored (stable) lists so a download's
+        // per-chunk progress notifications don't rebuild the whole map — only a
+        // completed fetch, which swaps the list reference, does.
+        final gpsTrackPoints = settings.mapShowGpsTrack
+            ? context.select<AmpmFeaturesService, List<LatLng>>(
+                (s) => s.gpsTrackPoints,
+              )
+            : const <LatLng>[];
+        final flockYouDetections = settings.mapShowFlockYou
+            ? context.select<AmpmFeaturesService, List<FlockYouDetection>>(
+                (s) => s.flockYouDetectionsWithLocation,
+              )
+            : const <FlockYouDetection>[];
         final scheme = Theme.of(context).colorScheme;
         final isDesktop = _isDesktopPlatform(defaultTargetPlatform);
         final allContacts = connector.allContacts;
@@ -789,6 +912,16 @@ class _MapScreenState extends State<MapScreen> {
                       PolylineLayer(polylines: _polylines),
                     if (sharedMarkerPolylines.isNotEmpty)
                       PolylineLayer(polylines: sharedMarkerPolylines),
+                    if (gpsTrackPoints.length >= 2)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: gpsTrackPoints,
+                            strokeWidth: 4,
+                            color: _gpsTrackColor,
+                          ),
+                        ],
+                      ),
                     MarkerLayer(
                       markers: [
                         if (highlightPosition != null)
@@ -897,6 +1030,10 @@ class _MapScreenState extends State<MapScreen> {
                           ),
                       ],
                     ),
+                    if (flockYouDetections.isNotEmpty)
+                      MarkerLayer(
+                        markers: _buildFlockYouMarkers(flockYouDetections),
+                      ),
                   ],
                 ),
                 if (selectedContact == null)
@@ -3461,6 +3598,135 @@ class _MapScreenState extends State<MapScreen> {
                           dense: true,
                           onChanged: (value) =>
                               service.setMapShowOverlaps(value),
+                        ),
+                        const SectionHeader('Surveillance & tracking'),
+                        Consumer2<AmpmFeaturesService, MeshCoreConnector>(
+                          builder: (ctx, ampm, connector, _) {
+                            final connected = connector.isConnected;
+
+                            String gpsSubtitle() {
+                              if (ampm.isLoadingGpsTrack) {
+                                final p = ampm.gpsDownloadProgress;
+                                return p == null
+                                    ? 'Downloading…'
+                                    : 'Downloading… ${(p * 100).round()}%';
+                              }
+                              if (ampm.gpsTrackFixes.isNotEmpty) {
+                                return '${ampm.gpsTrackFixes.length} fixes downloaded';
+                              }
+                              return connected
+                                  ? 'Tap download to fetch from device'
+                                  : 'Connect a device to download';
+                            }
+
+                            String flockSubtitle() {
+                              if (ampm.isLoadingFlockYou) return 'Downloading…';
+                              if (ampm.flockYouDetections.isNotEmpty) {
+                                final mapped = ampm
+                                    .flockYouDetectionsWithLocation
+                                    .length;
+                                return '${ampm.flockYouDetections.length} detections • $mapped on map';
+                              }
+                              return connected
+                                  ? 'Tap download to fetch from device'
+                                  : 'Connect a device to download';
+                            }
+
+                            Widget downloadButton({
+                              required bool loading,
+                              required double? progress,
+                              required VoidCallback? onPressed,
+                              required String tooltip,
+                            }) {
+                              return IconButton(
+                                tooltip: tooltip,
+                                onPressed: onPressed,
+                                icon: loading
+                                    ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          value: progress,
+                                        ),
+                                      )
+                                    : const Icon(Icons.download),
+                              );
+                            }
+
+                            return Column(
+                              children: [
+                                ListTile(
+                                  dense: true,
+                                  title: const Text('GPS track'),
+                                  subtitle: Text(gpsSubtitle()),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      downloadButton(
+                                        loading: ampm.isLoadingGpsTrack,
+                                        progress: ampm.gpsDownloadProgress,
+                                        tooltip: 'Download track from device',
+                                        onPressed:
+                                            (connected &&
+                                                !ampm.isLoadingGpsTrack)
+                                            ? () => ampm.fetchGpsTrack()
+                                            : null,
+                                      ),
+                                      Switch(
+                                        value: settings.mapShowGpsTrack,
+                                        onChanged: (v) {
+                                          service.setMapShowGpsTrack(v);
+                                          if (v &&
+                                              connected &&
+                                              ampm.gpsTrackFixes.isEmpty &&
+                                              !ampm.isLoadingGpsTrack) {
+                                            ampm.fetchGpsTrack();
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ListTile(
+                                  dense: true,
+                                  title: const Text('FlockYou detections'),
+                                  subtitle: Text(flockSubtitle()),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      downloadButton(
+                                        loading: ampm.isLoadingFlockYou,
+                                        progress: null,
+                                        tooltip:
+                                            'Download detections from device',
+                                        onPressed:
+                                            (connected &&
+                                                !ampm.isLoadingFlockYou)
+                                            ? () =>
+                                                  ampm.fetchFlockYouDetections()
+                                            : null,
+                                      ),
+                                      Switch(
+                                        value: settings.mapShowFlockYou,
+                                        onChanged: (v) {
+                                          service.setMapShowFlockYou(v);
+                                          if (v &&
+                                              connected &&
+                                              ampm
+                                                  .flockYouDetections
+                                                  .isEmpty &&
+                                              !ampm.isLoadingFlockYou) {
+                                            ampm.fetchFlockYouDetections();
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         SectionHeader(sheetContext.l10n.map_keyPrefix),
                         SwitchListTile(

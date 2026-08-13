@@ -283,6 +283,27 @@ const int pushCodeTelemetryResponse = 0x8B;
 const int pushCodeBinaryResponse = 0x8C;
 const int pushCodeControlData = 0x8E;
 
+// ── AMPM fork custom codes (0xF0-0xF7) ───────────────────────────────────
+// Command + response codes carried by the Martellaville AMPM firmware fork
+// (FlockYou surveillance-camera detector + GPS track logger). Upstream's
+// _handleFrame switch has no case for these, so responses are read off the
+// receivedFrames broadcast stream. Mirrors examples/companion_ampm/MyMesh.cpp
+// and meshcore-cli's ampm.py.
+const int cmdFlockYouEnable = 0xF0;
+const int cmdFlockYouDisable = 0xF1;
+const int cmdFlockYouClear = 0xF2;
+const int cmdGpsTrackList = 0xF3;
+const int cmdGpsTrackDownloadChunk = 0xF4;
+const int cmdGpsTrackClear = 0xF5;
+const int cmdFlockYouStatus = 0xF6;
+const int cmdFlockYouListChunk = 0xF7;
+
+// Response codes reuse the same byte value as the command that requests them.
+const int respCodeGpsTrackList = 0xF3;
+const int respCodeGpsTrackChunk = 0xF4;
+const int respCodeFlockYouStatus = 0xF6;
+const int respCodeFlockYouListChunk = 0xF7;
+
 // Contact/advertisement types
 const int advTypeChat = 1;
 const int advTypeRepeater = 2;

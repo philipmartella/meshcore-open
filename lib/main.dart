@@ -22,6 +22,7 @@ import 'services/storage_service.dart';
 import 'services/message_retry_service.dart';
 import 'services/path_history_service.dart';
 import 'services/app_settings_service.dart';
+import 'services/ampm_features_service.dart';
 import 'services/notification_service.dart';
 import 'services/ble_debug_log_service.dart';
 import 'services/app_debug_log_service.dart';
@@ -67,6 +68,9 @@ void main() async {
   final translationService = TranslationService(appSettingsService);
   final uiViewStateService = UiViewStateService();
   final timeoutPredictionService = TimeoutPredictionService(storage);
+  // AMPM fork custom features (FlockYou detector + GPS track logger). Talks the
+  // 0xF0-0xF7 companion commands over the connector; feeds the map overlays.
+  final ampmFeaturesService = AmpmFeaturesService(connector);
 
   // Load settings before anything reads them. The image stack below takes its
   // model registry and its "process automatically" default straight off
@@ -176,6 +180,7 @@ void main() async {
       translationService: translationService,
       uiViewStateService: uiViewStateService,
       timeoutPredictionService: timeoutPredictionService,
+      ampmFeaturesService: ampmFeaturesService,
       imageCodecService: imageCodecService,
       receivedImageStore: receivedImageStore,
       imageReassembler: imageReassembler,
@@ -311,6 +316,7 @@ class MeshCoreApp extends StatefulWidget {
   final TranslationService translationService;
   final UiViewStateService uiViewStateService;
   final TimeoutPredictionService timeoutPredictionService;
+  final AmpmFeaturesService ampmFeaturesService;
   final ImageCodecService imageCodecService;
   final ReceivedImageStore receivedImageStore;
   final ImageStreamReassembler imageReassembler;
@@ -329,6 +335,7 @@ class MeshCoreApp extends StatefulWidget {
     required this.translationService,
     required this.uiViewStateService,
     required this.timeoutPredictionService,
+    required this.ampmFeaturesService,
     required this.imageCodecService,
     required this.receivedImageStore,
     required this.imageReassembler,
@@ -404,6 +411,7 @@ class _MeshCoreAppState extends State<MeshCoreApp> with WidgetsBindingObserver {
         Provider.value(value: storage),
         ChangeNotifierProvider.value(value: widget.mapTileCacheService),
         ChangeNotifierProvider.value(value: widget.timeoutPredictionService),
+        ChangeNotifierProvider.value(value: widget.ampmFeaturesService),
         ChangeNotifierProvider.value(value: widget.imageCodecService),
         ChangeNotifierProvider.value(value: widget.receivedImageStore),
       ],
