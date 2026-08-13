@@ -1,12 +1,23 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_map/flutter_map.dart';
+// Prefixed to avoid TileLayer/Theme name clashes with flutter_map + material.
+import 'package:vector_map_tiles/vector_map_tiles.dart' as vmt;
+import 'package:vector_tile_renderer/vector_tile_renderer.dart' as vtr;
 
 import '../models/app_settings.dart';
 import 'app_settings_service.dart';
+import 'pmtiles_vector_tile_provider.dart';
+
+/// Asset path of the Protomaps-v4-schema style used by the vector basemap.
+/// Layers match our PMTiles archive (earth/water/roads/buildings/…); labels
+/// are intentionally omitted for now to avoid the glyph dependency.
+const String _vectorStyleAsset = 'assets/map/protomaps_light.json';
 
 enum MapRasterSourcePreset {
   osmAuto('osm_auto'),
@@ -453,7 +464,43 @@ class MapTileCacheService extends ChangeNotifier {
     'User-Agent': 'flutter_map ($userAgentPackageName)',
   };
 
+  // Memoized vector basemap resources (connected PMTiles provider + parsed
+  // theme). Rebuilt when the tiles URL changes. FutureBuilder in
+  // _VectorBasemapLayer consumes this, so the async connection doesn't depend
+  // on callers watching the service (they use context.read).
+  Future<_VectorResources>? _vectorFuture;
+  String? _vectorFutureUrl;
+
+  Future<_VectorResources> _vectorResources() {
+    final url = appSettingsService.settings.mapVectorTilesUrl;
+    final existing = _vectorFuture;
+    if (existing != null && _vectorFutureUrl == url) {
+      return existing;
+    }
+    _vectorFutureUrl = url;
+    final future = _loadVectorResources(url);
+    _vectorFuture = future;
+    return future;
+  }
+
+  static Future<_VectorResources> _loadVectorResources(String url) async {
+    final provider = await PmTilesVectorTileProvider.connect(url);
+    final styleJson = await rootBundle.loadString(_vectorStyleAsset);
+    final theme = vtr.ThemeReader().read(
+      jsonDecode(styleJson) as Map<String, dynamic>,
+    );
+    return _VectorResources(provider: provider, theme: theme);
+  }
+
   Widget buildTileLayer(BuildContext context, {double opacity = 1}) {
+    if (appSettingsService.settings.mapVectorEnabled) {
+      Widget layer = _VectorBasemapLayer(resourcesFuture: _vectorResources());
+      if (opacity < 1) {
+        layer = Opacity(opacity: opacity, child: layer);
+      }
+      return layer;
+    }
+
     Widget layer = TileLayer(
       urlTemplate: urlTemplate,
       tileProvider: tileProvider,
@@ -846,4 +893,45 @@ class _TileBounds {
     required this.minY,
     required this.maxY,
   });
+}
+
+/// Connected PMTiles provider + parsed vector-tile theme, produced once by
+/// [MapTileCacheService._loadVectorResources] and reused across rebuilds.
+class _VectorResources {
+  final PmTilesVectorTileProvider provider;
+  final vtr.Theme theme;
+
+  const _VectorResources({required this.provider, required this.theme});
+}
+
+/// Renders the vector basemap once its resources have connected/parsed.
+/// While connecting (or on error) it renders nothing so the FlutterMap
+/// background shows through and overlay layers (tracks, markers) still draw.
+/// Kept self-contained via FutureBuilder because callers use context.read and
+/// won't rebuild on the service's notifyListeners.
+class _VectorBasemapLayer extends StatelessWidget {
+  final Future<_VectorResources> resourcesFuture;
+
+  const _VectorBasemapLayer({required this.resourcesFuture});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_VectorResources>(
+      future: resourcesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final r = snapshot.data!;
+          return vmt.VectorTileLayer(
+            tileProviders: vmt.TileProviders({'protomaps': r.provider}),
+            theme: r.theme,
+            tileOffset: vmt.TileOffset.DEFAULT,
+          );
+        }
+        if (snapshot.hasError) {
+          debugPrint('vector basemap failed: ${snapshot.error}');
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
 }

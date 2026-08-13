@@ -96,6 +96,11 @@ class AppSettings {
   final String mapRasterSourceId;
   final String mapTileEndpointId;
   final String? mapTileApiKey;
+  // Vector basemap (Path A): opt-in switch + the PMTiles archive URL served
+  // over HTTP range. When enabled, MapTileCacheService renders a VectorTileLayer
+  // instead of the raster TileLayer. See pmtiles_vector_tile_provider.dart.
+  final bool mapVectorEnabled;
+  final String mapVectorTilesUrl;
   final bool notificationsEnabled;
   final bool notifyOnNewMessage;
   final bool notifyOnNewChannelMessage;
@@ -198,6 +203,9 @@ class AppSettings {
     this.mapRasterSourceId = 'osm_auto',
     this.mapTileEndpointId = 'standard_2x',
     this.mapTileApiKey,
+    this.mapVectorEnabled = false,
+    this.mapVectorTilesUrl =
+        'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
     this.notificationsEnabled = true,
     this.notifyOnNewMessage = true,
     this.notifyOnNewChannelMessage = true,
@@ -272,6 +280,8 @@ class AppSettings {
       'map_raster_source_id': mapRasterSourceId,
       'map_tile_endpoint_id': mapTileEndpointId,
       'map_tile_api_key': mapTileApiKey,
+      'map_vector_enabled': mapVectorEnabled,
+      'map_vector_tiles_url': mapVectorTilesUrl,
       'notifications_enabled': notificationsEnabled,
       'notify_on_new_message': notifyOnNewMessage,
       'notify_on_new_channel_message': notifyOnNewChannelMessage,
@@ -351,6 +361,10 @@ class AppSettings {
       mapRasterSourceId: json['map_raster_source_id'] as String? ?? 'osm_auto',
       mapTileEndpointId: json['map_tile_endpoint_id'] as String? ?? 'standard',
       mapTileApiKey: json['map_tile_api_key'] as String?,
+      mapVectorEnabled: json['map_vector_enabled'] as bool? ?? false,
+      mapVectorTilesUrl:
+          json['map_vector_tiles_url'] as String? ??
+          'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
       notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
       notifyOnNewMessage: json['notify_on_new_message'] as bool? ?? true,
       notifyOnNewChannelMessage:
@@ -484,6 +498,8 @@ class AppSettings {
     String? mapRasterSourceId,
     String? mapTileEndpointId,
     Object? mapTileApiKey = _unset,
+    bool? mapVectorEnabled,
+    String? mapVectorTilesUrl,
     bool? notificationsEnabled,
     bool? notifyOnNewMessage,
     bool? notifyOnNewChannelMessage,
@@ -547,6 +563,8 @@ class AppSettings {
       mapTileApiKey: mapTileApiKey == _unset
           ? this.mapTileApiKey
           : mapTileApiKey as String?,
+      mapVectorEnabled: mapVectorEnabled ?? this.mapVectorEnabled,
+      mapVectorTilesUrl: mapVectorTilesUrl ?? this.mapVectorTilesUrl,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       notifyOnNewMessage: notifyOnNewMessage ?? this.notifyOnNewMessage,
       notifyOnNewChannelMessage:

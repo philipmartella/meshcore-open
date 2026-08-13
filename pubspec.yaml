@@ -48,6 +48,28 @@ dependencies:
   uuid: ^4.3.3
   flutter_map: ^8.2.2
   latlong2: ^0.9.1
+  # Vector-tile basemap (Path A). vector_map_tiles renders MVT on flutter_map 8;
+  # pmtiles reads a PMTiles archive over HTTP range. We bridge them with our own
+  # small provider — the stale vector_map_tiles_pmtiles is deliberately unused.
+  #
+  # vector_map_tiles PINNED to the 9.x-beta line (NOT 10.x): 10.x renders via
+  # vector_tile_renderer 7-beta which pulls flutter_scene / GPU (Impeller). That
+  # native build fails under WSL, and GPU rendering on WSLg's software GL is
+  # unreliable anyway. 9.x-beta uses vector_tile_renderer 6.x (Canvas/Skia) and
+  # still supports flutter_map 8 (^8.1.1 covers 8.2.2). Pinned to beta.9
+  # specifically: beta.10/11 bumped latlong2 to ^0.10.1, which collides with
+  # pmtiles 1.2.0 (^0.9). beta.9 stays on latlong2 ^0.9.1.
+  #
+  # pmtiles PINNED to 1.2.x — the only version that conflicts with nothing here:
+  #   - 2.x  -> protobuf ^6 + latlong2 ^0.10, collide with the vector stack
+  #   - 1.3.0 -> archive ^3.x, collides with llamadart's archive ^4.x
+  #   - 1.2.0 -> protobuf ^3.1, latlong2 ^0.9, http, NO archive dep -> clean
+  # Cost: 1.2.0 doesn't bundle gzip, so our provider glue decompresses tiles.
+  vector_map_tiles: 9.0.0-beta.9
+  # Parses the Mapbox-GL style JSON into a render Theme. We import ThemeReader
+  # directly, so declare it; ^6.0.0 matches the 9.x-beta (Canvas) renderer.
+  vector_tile_renderer: ^6.0.0
+  pmtiles: ">=1.2.0 <1.3.0"
   flutter_local_notifications: ^22.0.0
   crypto: ^3.0.3
   pointycastle: ^4.0.0
@@ -121,6 +143,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/fonts/
+    - assets/map/
 
   fonts:
     - family: Inter

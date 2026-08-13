@@ -125,6 +125,14 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(mapRasterSourceId: value));
   }
 
+  Future<void> setMapVectorEnabled(bool value) async {
+    await updateSettings(_settings.copyWith(mapVectorEnabled: value));
+  }
+
+  Future<void> setMapVectorTilesUrl(String value) async {
+    await updateSettings(_settings.copyWith(mapVectorTilesUrl: value.trim()));
+  }
+
   Future<void> setMapTileEndpointId(String value) async {
     await updateSettings(_settings.copyWith(mapTileEndpointId: value));
   }
