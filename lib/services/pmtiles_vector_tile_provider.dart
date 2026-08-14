@@ -52,8 +52,23 @@ class PmTilesVectorTileProvider extends VectorTileProvider {
     );
   }
 
+  /// True when the archive stores its tiles gzip-compressed (the norm, and
+  /// what our Protomaps builds use). Lets callers keep the compressed bytes
+  /// rather than paying to inflate and re-deflate them.
+  bool get tilesAreGzip => _archive.tileCompression == Compression.gzip;
+
+  /// The tile's bytes exactly as stored in the archive, still compressed.
+  /// Same lookup and error contract as [provide].
+  Future<Uint8List> provideCompressed(TileIdentity tile) =>
+      _read(tile, (t) => t.compressedBytes());
+
   @override
-  Future<Uint8List> provide(TileIdentity tile) async {
+  Future<Uint8List> provide(TileIdentity tile) => _read(tile, (t) => t.bytes());
+
+  Future<Uint8List> _read(
+    TileIdentity tile,
+    List<int> Function(Tile) extract,
+  ) async {
     if (tile.z < minimumZoom || tile.z > maximumZoom || !tile.isValid()) {
       throw ProviderException(
         message: 'tile $tile outside archive range '
@@ -67,8 +82,7 @@ class PmTilesVectorTileProvider extends VectorTileProvider {
     final tileId = ZXY(tile.z, tile.x, tile.y).toTileId();
     try {
       final t = await _archive.tile(tileId);
-      // Tile.bytes() returns the decompressed MVT payload.
-      return Uint8List.fromList(t.bytes());
+      return Uint8List.fromList(extract(t));
     } on TileNotFoundException {
       // The archive deduped/omitted this cell (e.g. genuinely empty). A
       // non-retryable ProviderException tells vector_map_tiles to render

@@ -32,6 +32,7 @@ import '../icons/los_icon.dart';
 import 'channels_screen.dart';
 import 'chat_screen.dart';
 import 'contacts_screen.dart';
+import 'map_cache_screen.dart';
 import '../theme/mesh_theme.dart';
 import '../widgets/mesh_ui.dart';
 import '../widgets/repeater_login_dialog.dart';
@@ -448,8 +449,29 @@ class _MapScreenState extends State<MapScreen> {
                     max(_zoom, 14),
                   ),
                 ),
+              IconButton(
+                color: _overlayPrimaryTextColor,
+                icon: const Icon(Icons.download_for_offline_outlined),
+                tooltip: 'Offline maps',
+                onPressed: _openOfflineMaps,
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Opens offline-map management seeded with the current view, so
+  /// "download this area" starts from what the user is already looking at.
+  void _openOfflineMaps() {
+    final camera = _mapController.camera;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapCacheScreen(
+          initialCenter: camera.center,
+          initialZoom: camera.zoom,
         ),
       ),
     );

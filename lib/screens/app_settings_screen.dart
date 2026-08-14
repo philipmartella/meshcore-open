@@ -1054,7 +1054,7 @@ class AppSettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Download the vector basemap for offline use',
+                      'Stored map data, downloaded areas, offline-only mode',
                       style: textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),

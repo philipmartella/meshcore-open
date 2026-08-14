@@ -102,6 +102,13 @@ dependencies:
   # the abiFilters note in android/app/build.gradle.kts; a universal APK pays
   # ~56 MB for ORT instead of ~18 MB.
   flutter_onnxruntime: ^1.8.3
+  # Durable offline basemap store (lib/services/map_tile_store.dart) — an
+  # MBTiles-schema SQLite file that every tile read goes through: browsing fills
+  # it permanently and region pre-downloads write to the same table. sqflite is
+  # native on mobile; sqflite_common_ffi supplies the desktop (Linux/Windows/
+  # macOS) factory, registered in main(). Not used on web.
+  sqflite: ^2.4.3
+  sqflite_common_ffi: ^2.4.2
 
 hooks:
   user_defines:

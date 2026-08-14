@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'screens/chrome_required_screen.dart';
 import 'utils/platform_info.dart';
@@ -47,6 +48,15 @@ void main() async {
   // screens are unaffected — they store entries themselves.
   if (kReleaseMode) {
     debugPrint = (String? message, {int? wrapWidth}) {};
+  }
+
+  // The offline basemap store is SQLite. Mobile gets a native sqflite
+  // implementation automatically; desktop needs the FFI factory registered
+  // before the first database open. Web has no store (and no BLE), so it is
+  // skipped there.
+  if (PlatformInfo.isDesktop) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
   }
 
   // Initialize SharedPreferences cache

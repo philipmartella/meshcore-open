@@ -97,9 +97,11 @@ class AppSettings {
   // Vector basemap (the only basemap): PMTiles archive URL served over HTTP
   // range. See MapTileCacheService / pmtiles_vector_tile_provider.dart.
   final String mapVectorTilesUrl;
-  // When true and a local archive has been downloaded, the basemap reads the
-  // offline PMTiles file instead of the URL. See MapTileCacheService.
-  final bool mapVectorUseOffline;
+  // When true the basemap never touches the network: it renders only tiles
+  // already in the local store (browsed or pre-downloaded) plus any downloaded
+  // archive. Local-first is always on, so this is purely "don't fill gaps over
+  // the network" — useful on a metered link or with no signal.
+  final bool mapOfflineOnly;
   final bool notificationsEnabled;
   final bool notifyOnNewMessage;
   final bool notifyOnNewChannelMessage;
@@ -191,7 +193,7 @@ class AppSettings {
     this.enableMessageTracing = true,
     this.mapVectorTilesUrl =
         'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
-    this.mapVectorUseOffline = false,
+    this.mapOfflineOnly = false,
     this.notificationsEnabled = true,
     this.notifyOnNewMessage = true,
     this.notifyOnNewChannelMessage = true,
@@ -263,7 +265,7 @@ class AppSettings {
       'map_show_flockyou': mapShowFlockYou,
       'enable_message_tracing': enableMessageTracing,
       'map_vector_tiles_url': mapVectorTilesUrl,
-      'map_vector_use_offline': mapVectorUseOffline,
+      'map_offline_only': mapOfflineOnly,
       'notifications_enabled': notificationsEnabled,
       'notify_on_new_message': notifyOnNewMessage,
       'notify_on_new_channel_message': notifyOnNewChannelMessage,
@@ -340,7 +342,7 @@ class AppSettings {
       mapVectorTilesUrl:
           json['map_vector_tiles_url'] as String? ??
           'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
-      mapVectorUseOffline: json['map_vector_use_offline'] as bool? ?? false,
+      mapOfflineOnly: json['map_offline_only'] as bool? ?? false,
       notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
       notifyOnNewMessage: json['notify_on_new_message'] as bool? ?? true,
       notifyOnNewChannelMessage:
@@ -471,7 +473,7 @@ class AppSettings {
     bool? mapShowFlockYou,
     bool? enableMessageTracing,
     String? mapVectorTilesUrl,
-    bool? mapVectorUseOffline,
+    bool? mapOfflineOnly,
     bool? notificationsEnabled,
     bool? notifyOnNewMessage,
     bool? notifyOnNewChannelMessage,
@@ -528,7 +530,7 @@ class AppSettings {
       mapShowFlockYou: mapShowFlockYou ?? this.mapShowFlockYou,
       enableMessageTracing: enableMessageTracing ?? this.enableMessageTracing,
       mapVectorTilesUrl: mapVectorTilesUrl ?? this.mapVectorTilesUrl,
-      mapVectorUseOffline: mapVectorUseOffline ?? this.mapVectorUseOffline,
+      mapOfflineOnly: mapOfflineOnly ?? this.mapOfflineOnly,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       notifyOnNewMessage: notifyOnNewMessage ?? this.notifyOnNewMessage,
       notifyOnNewChannelMessage:

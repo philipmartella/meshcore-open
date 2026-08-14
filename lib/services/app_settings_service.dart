@@ -121,8 +121,8 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(mapVectorTilesUrl: value.trim()));
   }
 
-  Future<void> setMapVectorUseOffline(bool value) async {
-    await updateSettings(_settings.copyWith(mapVectorUseOffline: value));
+  Future<void> setMapOfflineOnly(bool value) async {
+    await updateSettings(_settings.copyWith(mapOfflineOnly: value));
   }
 
   Future<void> setNotificationsEnabled(bool value) async {
