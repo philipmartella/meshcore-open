@@ -32,6 +32,14 @@ void main() {
       await tmp.delete(recursive: true);
     });
 
+    test('opens in WAL mode so readers never block the writer', () async {
+      // Under the default rollback journal a concurrent reader blocks the
+      // writer taking EXCLUSIVE, which killed a region download mid-flight with
+      // "database is locked".
+      final mode = await store.rawJournalMode();
+      expect(mode.toLowerCase(), 'wal');
+    });
+
     test('round-trips a tile through the TMS row flip', () async {
       final data = Uint8List.fromList([1, 2, 3, 4]);
       await store.putTile(10, 266, 405, data);
@@ -109,6 +117,59 @@ void main() {
         );
       }
       expect((await store.regions()).map((r) => r.name), ['B']);
+    });
+
+    test('storedTileKeysInRange finds exactly the stored tiles', () async {
+      // The bulk lookup the downloader uses to skip already-held tiles does its
+      // own XYZ<->TMS conversion, so it has to agree with putTile's.
+      final region = MapRegion.fromBounds(
+        name: 'range',
+        bounds: LatLngBounds(const LatLng(10, 10), const LatLng(11, 11)),
+        minZoom: 9,
+        maxZoom: 9,
+      );
+      final range = region.tileRangeForZoom(9);
+      final all = range.tiles().toList();
+      expect(all.length, greaterThan(2));
+
+      // Store every other tile in the range.
+      final stored = <({int z, int x, int y})>[];
+      for (var i = 0; i < all.length; i += 2) {
+        stored.add(all[i]);
+        await store.putTile(all[i].z, all[i].x, all[i].y, Uint8List.fromList([1]));
+      }
+
+      final result = await store.storedTilesInRange(range);
+
+      expect(result.keys.length, stored.length);
+      for (final t in all) {
+        expect(
+          result.keys.contains(MapTileStore.tileKey(t.z, t.x, t.y)),
+          stored.contains(t),
+          reason: 'tile ${t.z}/${t.x}/${t.y} membership mismatch',
+        );
+      }
+      // One byte per stored tile above — a resumed download seeds its byte
+      // total from this, so an undercount would misreport the region size.
+      expect(result.bytes, stored.length);
+    });
+
+    test('storedTileKeysInRange ignores tiles outside the range', () async {
+      final region = MapRegion.fromBounds(
+        name: 'narrow',
+        bounds: LatLngBounds(const LatLng(10, 10), const LatLng(10.05, 10.05)),
+        minZoom: 9,
+        maxZoom: 9,
+      );
+      final range = region.tileRangeForZoom(9);
+      // A tile at the same zoom but well outside the box.
+      await store.putTile(9, range.maxX + 5, range.maxY + 5, Uint8List.fromList([1]));
+      // ...and one at a different zoom entirely.
+      await store.putTile(8, range.minX, range.minY, Uint8List.fromList([1]));
+
+      final result = await store.storedTilesInRange(range);
+      expect(result.keys, isEmpty);
+      expect(result.bytes, 0);
     });
 
     test('clearAll empties tiles and regions', () async {

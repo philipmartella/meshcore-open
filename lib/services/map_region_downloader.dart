@@ -71,16 +71,35 @@ class MapRegionDownloader {
   }) async {
     _cancelled = false;
 
+    // Build the work list, dropping tiles already held. The "already stored"
+    // check is one query per zoom rather than one per tile — a region can span
+    // tens of thousands of tiles, and per-tile lookups would both dominate the
+    // runtime and keep the database busy enough to stall the writer.
     final queue = <({int z, int x, int y})>[];
+    int alreadyStored = 0;
+    int alreadyBytes = 0;
     for (int z = region.minZoom; z <= region.maxZoom; z++) {
       // Beyond the archive's own max zoom there is nothing to fetch.
       if (z > source.maximumZoom || z < source.minimumZoom) continue;
-      queue.addAll(region.tileRangeForZoom(z).tiles());
+      final range = region.tileRangeForZoom(z);
+      final present = await store.storedTilesInRange(range);
+      alreadyBytes += present.bytes;
+      for (final t in range.tiles()) {
+        if (present.keys.contains(MapTileStore.tileKey(t.z, t.x, t.y))) {
+          alreadyStored++;
+          continue;
+        }
+        queue.add(t);
+      }
     }
 
-    final total = queue.length;
-    int completed = 0;
-    int bytes = 0;
+    // Resuming a partial download should still report against the whole
+    // region, so tiles skipped up front count as done.
+    final total = queue.length + alreadyStored;
+    int completed = alreadyStored;
+    // Seeded with what a previous run already wrote, so a resumed region
+    // reports its whole size rather than only this run's share.
+    int bytes = alreadyBytes;
     int absent = 0;
     int failed = 0;
     int next = 0;
@@ -93,6 +112,16 @@ class MapRegionDownloader {
       absent: absent,
       failed: failed,
     );
+
+    // Progress drives a rebuild of the managing screen, so it is reported on a
+    // timer rather than per tile — twelve workers finishing tiles would
+    // otherwise rebuild the UI thousands of times a download.
+    var progressDirty = false;
+    final ticker = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (!progressDirty) return;
+      progressDirty = false;
+      onProgress?.call(snapshot());
+    });
 
     Future<void> flush() async {
       if (pending.isEmpty) return;
@@ -115,12 +144,6 @@ class MapRegionDownloader {
         final i = next++;
         if (i >= queue.length) return;
         final t = queue[i];
-
-        if (await store.hasTile(t.z, t.x, t.y)) {
-          completed++;
-          onProgress?.call(snapshot());
-          continue;
-        }
 
         try {
           final gz = await StoredTileProvider.fetchAsGzip(
@@ -146,13 +169,18 @@ class MapRegionDownloader {
         }
 
         completed++;
-        onProgress?.call(snapshot());
+        progressDirty = true;
         if (pending.length >= _batchSize) await flush();
       }
     }
 
-    await Future.wait(List.generate(_concurrency, (_) => worker()));
-    await flush();
+    try {
+      await Future.wait(List.generate(_concurrency, (_) => worker()));
+      await flush();
+    } finally {
+      ticker.cancel();
+    }
+    onProgress?.call(snapshot());
 
     // Complete only when the whole queue landed without failures; a cancelled
     // or partial run stays resumable.

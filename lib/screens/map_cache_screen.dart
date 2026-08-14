@@ -103,6 +103,16 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
     _refresh();
   }
 
+  Future<void> _resumeRegion(MapRegion region) async {
+    try {
+      await context.read<MapTileCacheService>().resumeRegion(region);
+      if (mounted) _snack('“${region.name}” finished');
+    } catch (e) {
+      if (mounted) _snack('Resume failed: $e', error: true);
+    }
+    _refresh();
+  }
+
   Future<void> _deleteRegion(MapRegion region) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -241,10 +251,25 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
                       '${_formatBytes(r.bytes)} · z${r.minZoom}–${r.maxZoom}'
                       '${r.complete ? '' : ' · incomplete'}',
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: 'Delete',
-                      onPressed: () => _deleteRegion(r),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // An interrupted download continues from where it
+                        // stopped — stored tiles are skipped, not refetched.
+                        if (!r.complete)
+                          IconButton(
+                            icon: const Icon(Icons.play_arrow),
+                            tooltip: 'Resume download',
+                            onPressed: cache.isDownloadingRegion
+                                ? null
+                                : () => _resumeRegion(r),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Delete',
+                          onPressed: () => _deleteRegion(r),
+                        ),
+                      ],
                     ),
                   ),
                 ),

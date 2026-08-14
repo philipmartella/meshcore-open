@@ -35,6 +35,19 @@ class MapTileStore {
     _db = await openDatabase(
       '$directoryPath/$_dbFileName',
       version: _schemaVersion,
+      onConfigure: (db) async {
+        // Write-ahead logging so readers never block the writer. Region
+        // downloads write in sustained bursts while the UI (and anything else
+        // holding the file open) reads totals; under the default rollback
+        // journal a reader's SHARED lock stops the writer taking EXCLUSIVE and
+        // the download dies with "database is locked".
+        await db.rawQuery('PRAGMA journal_mode=WAL');
+        // Wait out a transient lock rather than failing the download outright.
+        await db.execute('PRAGMA busy_timeout=30000');
+        // Safe under WAL — a crash can cost the last commits, which for a
+        // resumable tile download simply means refetching a few tiles.
+        await db.execute('PRAGMA synchronous=NORMAL');
+      },
       onCreate: (db, version) async {
         // MBTiles core.
         await db.execute('''
@@ -84,6 +97,13 @@ class MapTileStore {
 
   bool get isOpen => _db != null;
 
+  /// The journal mode actually in force. Exposed so the WAL configuration can
+  /// be asserted rather than assumed.
+  Future<String> rawJournalMode() async {
+    final rows = await _database.rawQuery('PRAGMA journal_mode');
+    return rows.first.values.first.toString();
+  }
+
   Future<void> close() async {
     await _db?.close();
     _db = null;
@@ -108,6 +128,50 @@ class MapTileStore {
     if (rows.isEmpty) return null;
     final data = rows.first['tile_data'];
     return data is Uint8List ? data : Uint8List.fromList(data as List<int>);
+  }
+
+  /// Packs an XYZ tile into a single int key. Valid while `x`,`y` < 2^z and
+  /// z <= 22, which covers every zoom the basemap serves.
+  static int tileKey(int z, int x, int y) => x * (1 << z) + y;
+
+  /// Keys and total size of every tile already stored inside [range], in one
+  /// query.
+  ///
+  /// The download path uses this instead of a per-tile [hasTile]: a region can
+  /// hold tens of thousands of tiles, and one round-trip each both dominates
+  /// the runtime and keeps the database busy enough to starve the writer. The
+  /// byte total lets a resumed download report the region's real size rather
+  /// than only what the final run happened to fetch.
+  Future<({Set<int> keys, int bytes})> storedTilesInRange(
+    TileRange range,
+  ) async {
+    final rows = await _database.query(
+      'tiles',
+      columns: ['tile_column', 'tile_row', 'LENGTH(tile_data) AS len'],
+      where:
+          'zoom_level = ? AND tile_column BETWEEN ? AND ? '
+          'AND tile_row BETWEEN ? AND ?',
+      whereArgs: [
+        range.z,
+        range.minX,
+        range.maxX,
+        // TMS inverts the Y order, so the north edge is the larger row index.
+        _tmsRow(range.z, range.maxY),
+        _tmsRow(range.z, range.minY),
+      ],
+    );
+    return (
+      keys: {
+        for (final r in rows)
+          tileKey(
+            range.z,
+            r['tile_column'] as int,
+            // Back to XYZ — _tmsRow is its own inverse at a given zoom.
+            _tmsRow(range.z, r['tile_row'] as int),
+          ),
+      },
+      bytes: rows.fold<int>(0, (sum, r) => sum + ((r['len'] as int?) ?? 0)),
+    );
   }
 
   Future<bool> hasTile(int z, int x, int y) async {

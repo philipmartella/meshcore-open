@@ -99,6 +99,15 @@ class MapTileCacheService extends ChangeNotifier {
   RegionDownloadProgress? get regionProgress => _regionProgress;
   String? get downloadingRegionName => _downloadingRegionName;
 
+  /// Deepest zoom the basemap actually carries.
+  ///
+  /// Offering more in the UI would inflate the pre-download estimate with tiles
+  /// the archive cannot supply and the downloader correctly skips.
+  Future<int> maxAvailableZoom() async {
+    final resources = await _vectorResources();
+    return resources.provider.maximumZoom;
+  }
+
   /// Estimated bytes per stored tile, measured from what is already held so the
   /// pre-download estimate reflects this archive's real tile density rather
   /// than a guess. Falls back to a mid-range value on an empty store.
@@ -118,8 +127,29 @@ class MapTileCacheService extends ChangeNotifier {
     required int minZoom,
     required int maxZoom,
   }) async {
-    if (isDownloadingRegion) return;
+    final region = MapRegion.fromBounds(
+      name: name,
+      bounds: bounds,
+      minZoom: minZoom,
+      maxZoom: maxZoom,
+    );
     await _ensureStoreOpen();
+    await _runDownload(region, await store.insertRegion(region));
+  }
+
+  /// Finishes a region whose download was cancelled or interrupted.
+  ///
+  /// Reuses the existing row rather than adding a second one, and the tiles
+  /// already stored are skipped, so this picks up where it stopped.
+  Future<void> resumeRegion(MapRegion region) async {
+    final id = region.id;
+    if (id == null) return;
+    await _ensureStoreOpen();
+    await _runDownload(region, id);
+  }
+
+  Future<void> _runDownload(MapRegion region, int id) async {
+    if (isDownloadingRegion) return;
 
     final resources = await _vectorResources();
     final source = resources.provider.remote ?? resources.provider.localArchive;
@@ -127,14 +157,7 @@ class MapTileCacheService extends ChangeNotifier {
       throw StateError('No tile source available — offline-only with no archive');
     }
 
-    final region = MapRegion.fromBounds(
-      name: name,
-      bounds: bounds,
-      minZoom: minZoom,
-      maxZoom: maxZoom,
-    );
-    final id = await store.insertRegion(region);
-
+    final name = region.name;
     _downloadingRegionName = name;
     _regionProgress = RegionDownloadProgress(
       completed: 0,

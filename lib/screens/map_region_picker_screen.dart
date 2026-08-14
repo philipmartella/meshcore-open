@@ -60,14 +60,26 @@ class _MapRegionPickerScreenState extends State<MapRegionPickerScreen> {
   int _maxZoom = 14;
   double _avgTileBytes = 12 * 1024;
 
+  /// Upper bound of the detail slider — the archive's deepest zoom, so the
+  /// estimate never counts tiles that cannot be fetched.
+  int _zoomCeiling = 16;
+
   @override
   void initState() {
     super.initState();
     _nameController.text = 'Region';
+    final cache = context.read<MapTileCacheService>();
     // Size estimates use this archive's own average tile size when the store
     // has enough samples to be meaningful.
-    context.read<MapTileCacheService>().averageTileBytes().then((v) {
+    cache.averageTileBytes().then((v) {
       if (mounted) setState(() => _avgTileBytes = v);
+    });
+    cache.maxAvailableZoom().then((z) {
+      if (!mounted) return;
+      setState(() {
+        _zoomCeiling = z;
+        if (_maxZoom > z) _maxZoom = z;
+      });
     });
   }
 
@@ -267,10 +279,10 @@ class _MapRegionPickerScreenState extends State<MapRegionPickerScreen> {
                 Text('Detail', style: Theme.of(context).textTheme.bodyMedium),
                 Expanded(
                   child: Slider(
-                    value: _maxZoom.toDouble(),
+                    value: _maxZoom.clamp(8, _zoomCeiling).toDouble(),
                     min: 8,
-                    max: 16,
-                    divisions: 8,
+                    max: _zoomCeiling.toDouble(),
+                    divisions: (_zoomCeiling - 8).clamp(1, 16),
                     label: 'z$_maxZoom',
                     onChanged: (v) => setState(() => _maxZoom = v.round()),
                   ),
