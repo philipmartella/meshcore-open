@@ -172,6 +172,44 @@ void main() {
       expect(result.bytes, 0);
     });
 
+    test('deleting a region removes tiles a distant region does not cover',
+        () async {
+      // Regression: the survivor scan used to ignore geography, so ANY other
+      // region at the same zoom was treated as protecting tiles — which both
+      // left tiles behind and forced a slow row-by-row delete.
+      final target = MapRegion.fromBounds(
+        name: 'target',
+        bounds: LatLngBounds(const LatLng(10, 10), const LatLng(11, 11)),
+        minZoom: 9,
+        maxZoom: 9,
+      );
+      final faraway = MapRegion.fromBounds(
+        name: 'faraway',
+        bounds: LatLngBounds(const LatLng(-40, -70), const LatLng(-39, -69)),
+        minZoom: 9,
+        maxZoom: 9,
+      );
+      final targetId = await store.insertRegion(target);
+      await store.insertRegion(faraway);
+
+      for (final r in [target, faraway]) {
+        for (final t in r.tileRangeForZoom(9).tiles()) {
+          await store.putTile(t.z, t.x, t.y, Uint8List.fromList([1]));
+        }
+      }
+
+      await store.deleteRegion(targetId);
+
+      for (final t in target.tileRangeForZoom(9).tiles()) {
+        expect(await store.hasTile(t.z, t.x, t.y), isFalse,
+            reason: 'tile ${t.z}/${t.x}/${t.y} is not covered by any survivor');
+      }
+      // The distant region must be untouched.
+      for (final t in faraway.tileRangeForZoom(9).tiles()) {
+        expect(await store.hasTile(t.z, t.x, t.y), isTrue);
+      }
+    });
+
     test('clearAll empties tiles and regions', () async {
       await store.putTile(3, 1, 1, Uint8List.fromList([1]));
       await store.insertRegion(

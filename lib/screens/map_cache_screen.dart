@@ -16,11 +16,12 @@ import 'map_region_picker_screen.dart';
 /// that store holds: how much has accumulated from browsing, which areas were
 /// pre-downloaded, and whether to stay off the network entirely.
 class MapCacheScreen extends StatefulWidget {
-  /// Where the region picker should open — normally the map's current view.
+  /// Where the region picker should open. Supplied when opened from the map;
+  /// otherwise the last remembered map view is used.
   final LatLng? initialCenter;
-  final double initialZoom;
+  final double? initialZoom;
 
-  const MapCacheScreen({super.key, this.initialCenter, this.initialZoom = 11});
+  const MapCacheScreen({super.key, this.initialCenter, this.initialZoom});
 
   @override
   State<MapCacheScreen> createState() => _MapCacheScreenState();
@@ -78,13 +79,21 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
 
   Future<void> _pickAndDownloadRegion() async {
     final cache = context.read<MapTileCacheService>();
+    // Prefer the view passed in from the map; otherwise reopen on wherever the
+    // map was last looking, so arriving from Settings doesn't start at (0,0).
+    final settings = context.read<AppSettingsService>().settings;
+    final lat = settings.mapLastCenterLat;
+    final lon = settings.mapLastCenterLon;
+    final center =
+        widget.initialCenter ??
+        ((lat != null && lon != null) ? LatLng(lat, lon) : const LatLng(0, 0));
+    final zoom = widget.initialZoom ?? settings.mapLastZoom ?? 11;
+
     final picked = await Navigator.push<PickedRegion>(
       context,
       MaterialPageRoute(
-        builder: (_) => MapRegionPickerScreen(
-          initialCenter: widget.initialCenter ?? const LatLng(0, 0),
-          initialZoom: widget.initialZoom,
-        ),
+        builder: (_) =>
+            MapRegionPickerScreen(initialCenter: center, initialZoom: zoom),
       ),
     );
     if (picked == null || !mounted) return;
@@ -202,6 +211,29 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
           final s = snap.data;
           return ListView(
             children: [
+              if (cache.isBusy)
+                Card(
+                  margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            cache.busyLabel ?? 'Working…',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (cache.isDownloadingRegion) _buildActiveDownload(cache),
 
               _SectionLabel('Stored map data'),
@@ -260,14 +292,14 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
                           IconButton(
                             icon: const Icon(Icons.play_arrow),
                             tooltip: 'Resume download',
-                            onPressed: cache.isDownloadingRegion
+                            onPressed: (cache.isDownloadingRegion || cache.isBusy)
                                 ? null
                                 : () => _resumeRegion(r),
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline),
                           tooltip: 'Delete',
-                          onPressed: () => _deleteRegion(r),
+                          onPressed: cache.isBusy ? null : () => _deleteRegion(r),
                         ),
                       ],
                     ),
@@ -278,7 +310,7 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: cache.isDownloadingRegion
+                    onPressed: (cache.isDownloadingRegion || cache.isBusy)
                         ? null
                         : _pickAndDownloadRegion,
                     icon: const Icon(Icons.add_location_alt_outlined),
@@ -297,7 +329,7 @@ class _MapCacheScreenState extends State<MapCacheScreen> {
                 title: const Text('Clear offline map data'),
                 subtitle: const Text('Removes all stored tiles and areas'),
                 trailing: TextButton(
-                  onPressed: _clearStore,
+                  onPressed: cache.isBusy ? null : _clearStore,
                   child: Text(context.l10n.common_clear),
                 ),
               ),

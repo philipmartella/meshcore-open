@@ -267,43 +267,37 @@ class MapTileStore {
     await _database.transaction((txn) async {
       for (int z = target.minZoom; z <= target.maxZoom; z++) {
         final range = target.tileRangeForZoom(z);
-        final overlapping = survivors
+        // Rows are TMS, so the north edge (min Y) becomes the max row.
+        final minRow = _tmsRow(z, range.maxY);
+        final maxRow = _tmsRow(z, range.minY);
+
+        // Only survivors whose rectangle actually intersects this one can
+        // protect any tiles; the rest would just bloat the statement.
+        final protecting = survivors
             .where((r) => z >= r.minZoom && z <= r.maxZoom)
             .map((r) => r.tileRangeForZoom(z))
-            .toList();
-        if (overlapping.isEmpty) {
-          // Whole rectangle is unclaimed — delete it in one statement.
-          await txn.delete(
-            'tiles',
-            where:
-                'zoom_level = ? AND tile_column BETWEEN ? AND ? '
-                'AND tile_row BETWEEN ? AND ?',
-            whereArgs: [
-              z,
-              range.minX,
-              range.maxX,
-              // TMS rows invert the Y order, so the north edge is the max row.
-              _tmsRow(z, range.maxY),
-              _tmsRow(z, range.minY),
-            ],
+            .where(
+              (o) =>
+                  o.minX <= range.maxX &&
+                  o.maxX >= range.minX &&
+                  o.minY <= range.maxY &&
+                  o.maxY >= range.minY,
+            );
+
+        // One statement per zoom, whatever the tile count. Deleting row by row
+        // instead means tens of thousands of round-trips for a large region.
+        final where = StringBuffer(
+          'zoom_level = ? AND tile_column BETWEEN ? AND ? '
+          'AND tile_row BETWEEN ? AND ?',
+        );
+        final args = <Object?>[z, range.minX, range.maxX, minRow, maxRow];
+        for (final o in protecting) {
+          where.write(
+            ' AND NOT (tile_column BETWEEN ? AND ? AND tile_row BETWEEN ? AND ?)',
           );
-          continue;
+          args.addAll([o.minX, o.maxX, _tmsRow(z, o.maxY), _tmsRow(z, o.minY)]);
         }
-        for (final t in range.tiles()) {
-          final covered = overlapping.any(
-            (o) =>
-                t.x >= o.minX &&
-                t.x <= o.maxX &&
-                t.y >= o.minY &&
-                t.y <= o.maxY,
-          );
-          if (covered) continue;
-          await txn.delete(
-            'tiles',
-            where: 'zoom_level = ? AND tile_column = ? AND tile_row = ?',
-            whereArgs: [z, t.x, _tmsRow(z, t.y)],
-          );
-        }
+        await txn.delete('tiles', where: where.toString(), whereArgs: args);
       }
       await txn.delete('regions', where: 'id = ?', whereArgs: [id]);
     });

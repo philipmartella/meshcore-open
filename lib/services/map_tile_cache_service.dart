@@ -190,18 +190,37 @@ class MapTileCacheService extends ChangeNotifier {
 
   void cancelRegionDownload() => _downloader.cancel();
 
+  /// What long-running store maintenance is in flight, if any.
+  ///
+  /// Deleting a large area rewrites and vacuums a multi-gigabyte database, so
+  /// the UI needs something to show rather than appearing hung.
+  String? _busyLabel;
+  bool get isBusy => _busyLabel != null;
+  String? get busyLabel => _busyLabel;
+
+  Future<T> _withBusy<T>(String label, Future<T> Function() action) async {
+    _busyLabel = label;
+    notifyListeners();
+    try {
+      return await action();
+    } finally {
+      _busyLabel = null;
+      notifyListeners();
+    }
+  }
+
   Future<void> deleteRegion(int id) async {
     await _ensureStoreOpen();
-    await store.deleteRegion(id);
-    notifyListeners();
+    await _withBusy('Deleting area…', () => store.deleteRegion(id));
   }
 
   /// Drops every stored tile and region. The offline archive is untouched.
   Future<void> clearStore() async {
     await _ensureStoreOpen();
-    await store.clearAll();
-    await _clearRenderCache();
-    notifyListeners();
+    await _withBusy('Clearing map data…', () async {
+      await store.clearAll();
+      await _clearRenderCache();
+    });
   }
 
   /// Clears vector_map_tiles' ephemeral decoded-tile cache.

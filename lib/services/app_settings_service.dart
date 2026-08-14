@@ -125,6 +125,23 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(mapOfflineOnly: value));
   }
 
+  /// Remembers where the map was last looking, so the offline-region picker can
+  /// open on the same area. Written when leaving the map rather than while
+  /// panning — this hits SharedPreferences.
+  Future<void> setMapLastCamera({
+    required double lat,
+    required double lon,
+    required double zoom,
+  }) async {
+    await updateSettings(
+      _settings.copyWith(
+        mapLastCenterLat: lat,
+        mapLastCenterLon: lon,
+        mapLastZoom: zoom,
+      ),
+    );
+  }
+
   Future<void> setNotificationsEnabled(bool value) async {
     await updateSettings(_settings.copyWith(notificationsEnabled: value));
   }

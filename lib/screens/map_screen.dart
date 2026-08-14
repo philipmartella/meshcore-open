@@ -246,11 +246,32 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _rememberCamera();
     _searchController.dispose();
     _searchFocus.dispose();
     _mapController.dispose();
     super.dispose();
   }
+
+  /// Persist the current view so the offline-region picker can open on it later,
+  /// including when reached from Settings instead of from here. Done on the way
+  /// out rather than while panning — it writes to SharedPreferences.
+  void _rememberCamera() {
+    try {
+      final camera = _mapController.camera;
+      _settingsServiceForCamera?.setMapLastCamera(
+        lat: camera.center.latitude,
+        lon: camera.center.longitude,
+        zoom: camera.zoom,
+      );
+    } catch (_) {
+      // Camera not attached (disposed before first layout) — nothing to save.
+    }
+  }
+
+  /// Captured during build: `dispose` runs after the element is unmounted, so
+  /// `context.read` is no longer legal there.
+  AppSettingsService? _settingsServiceForCamera;
 
   ColorScheme get _overlayScheme => Theme.of(context).colorScheme;
 
@@ -518,6 +539,7 @@ class _MapScreenState extends State<MapScreen> {
           (service) => service.version,
         );
         final settingsService = context.read<AppSettingsService>();
+        _settingsServiceForCamera = settingsService;
         final pathHistory = context.read<PathHistoryService>();
         final tileCache = context.read<MapTileCacheService>();
         // AMPM overlays. select on the stored (stable) lists so a download's

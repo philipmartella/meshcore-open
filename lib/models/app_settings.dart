@@ -102,6 +102,12 @@ class AppSettings {
   // archive. Local-first is always on, so this is purely "don't fill gaps over
   // the network" — useful on a metered link or with no signal.
   final bool mapOfflineOnly;
+  // Where the map was last looking. Used to open the offline-region picker on
+  // the same area, including when it is reached from Settings rather than from
+  // the map itself. Null until the map has been opened once.
+  final double? mapLastCenterLat;
+  final double? mapLastCenterLon;
+  final double? mapLastZoom;
   final bool notificationsEnabled;
   final bool notifyOnNewMessage;
   final bool notifyOnNewChannelMessage;
@@ -194,6 +200,9 @@ class AppSettings {
     this.mapVectorTilesUrl =
         'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
     this.mapOfflineOnly = false,
+    this.mapLastCenterLat,
+    this.mapLastCenterLon,
+    this.mapLastZoom,
     this.notificationsEnabled = true,
     this.notifyOnNewMessage = true,
     this.notifyOnNewChannelMessage = true,
@@ -266,6 +275,9 @@ class AppSettings {
       'enable_message_tracing': enableMessageTracing,
       'map_vector_tiles_url': mapVectorTilesUrl,
       'map_offline_only': mapOfflineOnly,
+      'map_last_center_lat': mapLastCenterLat,
+      'map_last_center_lon': mapLastCenterLon,
+      'map_last_zoom': mapLastZoom,
       'notifications_enabled': notificationsEnabled,
       'notify_on_new_message': notifyOnNewMessage,
       'notify_on_new_channel_message': notifyOnNewChannelMessage,
@@ -343,6 +355,9 @@ class AppSettings {
           json['map_vector_tiles_url'] as String? ??
           'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
       mapOfflineOnly: json['map_offline_only'] as bool? ?? false,
+      mapLastCenterLat: (json['map_last_center_lat'] as num?)?.toDouble(),
+      mapLastCenterLon: (json['map_last_center_lon'] as num?)?.toDouble(),
+      mapLastZoom: (json['map_last_zoom'] as num?)?.toDouble(),
       notificationsEnabled: json['notifications_enabled'] as bool? ?? true,
       notifyOnNewMessage: json['notify_on_new_message'] as bool? ?? true,
       notifyOnNewChannelMessage:
@@ -474,6 +489,9 @@ class AppSettings {
     bool? enableMessageTracing,
     String? mapVectorTilesUrl,
     bool? mapOfflineOnly,
+    double? mapLastCenterLat,
+    double? mapLastCenterLon,
+    double? mapLastZoom,
     bool? notificationsEnabled,
     bool? notifyOnNewMessage,
     bool? notifyOnNewChannelMessage,
@@ -531,6 +549,9 @@ class AppSettings {
       enableMessageTracing: enableMessageTracing ?? this.enableMessageTracing,
       mapVectorTilesUrl: mapVectorTilesUrl ?? this.mapVectorTilesUrl,
       mapOfflineOnly: mapOfflineOnly ?? this.mapOfflineOnly,
+      mapLastCenterLat: mapLastCenterLat ?? this.mapLastCenterLat,
+      mapLastCenterLon: mapLastCenterLon ?? this.mapLastCenterLon,
+      mapLastZoom: mapLastZoom ?? this.mapLastZoom,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
       notifyOnNewMessage: notifyOnNewMessage ?? this.notifyOnNewMessage,
       notifyOnNewChannelMessage:
