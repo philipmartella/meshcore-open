@@ -101,12 +101,26 @@ List<double> getSNRfromSF(int spreadingFactor) {
   }
 }
 
-SNRUi snrUiFromSNR(double? snr, int? spreadingFactor) {
+/// Icon, color and label for an SNR reading.
+///
+/// Pass [scheme] when this renders on an ordinary surface; omit it for the
+/// dark panels drawn over map tiles, which want the raw palette values.
+SNRUi snrUiFromSNR(
+  double? snr,
+  int? spreadingFactor, {
+  ColorScheme? scheme,
+}) {
   if (snr == null ||
       spreadingFactor == null ||
       spreadingFactor < 7 ||
       spreadingFactor > 12) {
-    return const SNRUi(Icons.signal_cellular_off, Colors.grey, '—');
+    // "No signal" is chrome rather than a signal level, so it follows the
+    // scheme's muted ink where one is available.
+    return SNRUi(
+      Icons.signal_cellular_off,
+      scheme?.onSurfaceVariant ?? Colors.grey,
+      '—',
+    );
   }
 
   final snrLevels = getSNRfromSF(spreadingFactor);
@@ -121,7 +135,7 @@ SNRUi snrUiFromSNR(double? snr, int? spreadingFactor) {
       : snr >= snrLevels[3]
       ? 3
       : 4;
-  final signalUi = signalUiForStrengthTier(tier);
+  final signalUi = signalUiForStrengthTier(tier, scheme: scheme);
 
   return SNRUi(signalUi.icon, signalUi.color, text);
 }
@@ -157,6 +171,7 @@ class _SNRIndicatorState extends State<SNRIndicator> {
     final snrUi = snrUiFromSNR(
       directBestRepeaters.isNotEmpty ? directRepeater!.snr : null,
       widget.connector.currentSf,
+      scheme: Theme.of(context).colorScheme,
     );
 
     return ConstrainedBox(
@@ -261,6 +276,7 @@ class _SNRIndicatorState extends State<SNRIndicator> {
                 final snrColor = MeshTheme.snrColor(
                   repeater.snr,
                   blocked: false,
+                  scheme: Theme.of(context).colorScheme,
                 );
 
                 return Padding(

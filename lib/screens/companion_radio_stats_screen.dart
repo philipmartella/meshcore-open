@@ -139,7 +139,11 @@ class _CompanionRadioStatsScreenState extends State<CompanionRadioStatsScreen> {
                               stats.lastSnrDb.toStringAsFixed(1),
                             ),
                             Icons.signal_cellular_alt,
-                            MeshTheme.snrColor(stats.lastSnrDb, blocked: false),
+                            MeshTheme.snrColor(
+                              stats.lastSnrDb,
+                              blocked: false,
+                              scheme: Theme.of(context).colorScheme,
+                            ),
                           ),
                         ],
                       ),

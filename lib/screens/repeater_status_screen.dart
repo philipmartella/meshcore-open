@@ -537,7 +537,11 @@ class _RepeaterStatusScreenState extends State<RepeaterStatusScreen> {
               icon: Icons.waves,
               label: l10n.repeater_lastSnr,
               value: _formatSnr(_lastSnr),
-              color: MeshTheme.snrColor(_lastSnr, blocked: false),
+              color: MeshTheme.snrColor(
+                _lastSnr,
+                blocked: false,
+                scheme: Theme.of(context).colorScheme,
+              ),
             ),
             _StatItem(
               icon: Icons.noise_control_off,

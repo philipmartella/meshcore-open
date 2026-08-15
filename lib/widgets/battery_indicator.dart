@@ -9,14 +9,20 @@ class BatteryUi {
   const BatteryUi(this.icon, this.color);
 }
 
-BatteryUi batteryUiForPercent(int? percent) {
+/// Icon + color for a battery level.
+///
+/// Pass [scheme] when the icon is drawn on an ordinary surface: the alert red,
+/// amber and green here were picked against the dark surface and wash out on
+/// the light one. Omitting it returns the raw palette value, which is what map
+/// overlays and other deliberately dark contexts want.
+BatteryUi batteryUiForPercent(int? percent, {ColorScheme? scheme}) {
   if (percent == null) {
     return const BatteryUi(Icons.battery_unknown, null);
   }
 
   final p = percent.clamp(0, 100);
 
-  return switch (p) {
+  final ui = switch (p) {
     <= 5 => const BatteryUi(Icons.battery_alert, MeshPalette.alert),
     <= 15 => const BatteryUi(Icons.battery_0_bar, MeshPalette.alert),
     <= 30 => const BatteryUi(Icons.battery_1_bar, MeshPalette.warn),
@@ -25,6 +31,9 @@ BatteryUi batteryUiForPercent(int? percent) {
     <= 80 => const BatteryUi(Icons.battery_5_bar, null),
     _ => const BatteryUi(Icons.battery_full, MeshPalette.signal),
   };
+  final color = ui.color;
+  if (scheme == null || color == null) return ui;
+  return BatteryUi(ui.icon, MeshTheme.readableOn(color, scheme.surface));
 }
 
 class BatteryIndicator extends StatefulWidget {
@@ -55,7 +64,10 @@ class _BatteryIndicatorState extends State<BatteryIndicator> {
       displayText = percent != null ? '$percent%' : '—';
     }
 
-    final batteryUi = batteryUiForPercent(percent);
+    final batteryUi = batteryUiForPercent(
+      percent,
+      scheme: Theme.of(context).colorScheme,
+    );
 
     return InkWell(
       onTap: () {

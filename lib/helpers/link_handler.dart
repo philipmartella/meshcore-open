@@ -107,7 +107,7 @@ class LinkHandler {
           showDismissibleSnackBar(
             context,
             content: Text(context.l10n.chat_couldNotOpenLink(url)),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           );
         }
       }
@@ -116,7 +116,7 @@ class LinkHandler {
         showDismissibleSnackBar(
           context,
           content: Text(context.l10n.chat_invalidLink),
-          backgroundColor: Colors.red,
+          backgroundColor: Theme.of(context).colorScheme.error,
         );
       }
     }

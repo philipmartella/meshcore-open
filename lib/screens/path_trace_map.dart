@@ -725,7 +725,7 @@ class _PathTraceMapScreenState extends State<PathTraceMapScreen>
                 Polyline(
                   points: _points,
                   strokeWidth: 4,
-                  color: Colors.blueAccent,
+                  color: MapPalette.selected,
                 ),
               ]
             : <Polyline>[];

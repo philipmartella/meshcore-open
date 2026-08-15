@@ -1420,7 +1420,14 @@ class _MessageBubble extends StatelessWidget {
                                 style: MeshTheme.mono(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: _colorForName(senderName),
+                                  // Per-sender hues are dark-surface values;
+                                  // resolve against the bubble they label.
+                                  color: MeshTheme.readableOn(
+                                    _colorForName(senderName),
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainerLow,
+                                  ),
                                 ),
                               ),
                             ),

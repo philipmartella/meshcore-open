@@ -57,7 +57,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       case advTypeRoom:
         return MeshPalette.magenta;
       case advTypeSensor:
-        return const Color(0xFF4ACCC4); // teal
+        return MeshPalette.teal;
       default:
         return MeshPalette.blue;
     }

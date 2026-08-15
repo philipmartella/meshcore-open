@@ -280,14 +280,19 @@ class _ChannelChatScreenState extends State<ChannelChatScreen> {
               width: 12,
               height: 12,
               decoration: BoxDecoration(
-                color: Colors.purple,
+                // The palette's room/channel accent rather than a third purple.
+                color: MeshPalette.magenta,
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: Theme.of(context).cardColor,
                   width: 2,
                 ),
               ),
-              child: const Icon(Icons.people, size: 8, color: Colors.white),
+              child: Icon(
+                Icons.people,
+                size: 8,
+                color: MeshTheme.onColor(MeshPalette.magenta),
+              ),
             ),
           ),
       ],
@@ -2199,7 +2204,7 @@ class _RegionSelectDialogState extends State<_RegionSelectDialog> {
                     ),
                     title: Text(regions[index]),
                     trailing: selected
-                        ? const Icon(Icons.check, color: MeshPalette.blue)
+                        ? Icon(Icons.check, color: MeshTheme.accent(context, MeshPalette.blue))
                         : null,
                     tileColor: selected ? MeshPalette.blueBg : null,
                     onTap: () {

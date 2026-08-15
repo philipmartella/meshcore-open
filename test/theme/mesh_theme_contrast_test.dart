@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:meshcore_open/theme/mesh_theme.dart';
+import 'package:meshcore_open/widgets/battery_indicator.dart';
+import 'package:meshcore_open/widgets/signal_ui.dart';
 
 /// The palette's accents were chosen against the near-black dark surface. Used
 /// unchanged on the light surface they land around 2.0-2.6:1, which is what
@@ -121,13 +123,65 @@ void main() {
     });
   });
 
+  group('semantic helpers resolve for the surface they draw on', () {
+    test('snrColor clears AA in both modes when given a scheme', () {
+      for (final snr in <num?>[null, 4, -8, -20]) {
+        for (final scheme in [light, dark]) {
+          expect(
+            MeshTheme.contrastRatio(
+              MeshTheme.snrColor(snr, blocked: false, scheme: scheme),
+              scheme.surface,
+            ),
+            greaterThanOrEqualTo(4.5),
+            reason: 'snr=$snr unreadable',
+          );
+        }
+      }
+    });
+
+    test('snrColor without a scheme keeps the raw palette value', () {
+      // Map panels are deliberately dark and want the unresolved ramp.
+      expect(MeshTheme.snrColor(4, blocked: false), MeshPalette.signal);
+      expect(MeshTheme.snrColor(null, blocked: true), MeshPalette.alert);
+    });
+
+    test('signalUiForStrengthTier clears AA in both modes', () {
+      for (var tier = 0; tier <= 4; tier++) {
+        for (final scheme in [light, dark]) {
+          expect(
+            MeshTheme.contrastRatio(
+              signalUiForStrengthTier(tier, scheme: scheme).color,
+              scheme.surface,
+            ),
+            greaterThanOrEqualTo(4.5),
+            reason: 'tier $tier unreadable',
+          );
+        }
+      }
+    });
+
+    test('batteryUiForPercent clears AA in both modes', () {
+      for (final pct in [3, 10, 25, 40, 55, 70, 100]) {
+        for (final scheme in [light, dark]) {
+          final color = batteryUiForPercent(pct, scheme: scheme).color;
+          if (color == null) continue; // inherits the ambient icon color
+          expect(
+            MeshTheme.contrastRatio(color, scheme.surface),
+            greaterThanOrEqualTo(4.5),
+            reason: '$pct% unreadable',
+          );
+        }
+      }
+    });
+  });
+
   group('readableOn handles arbitrary call-site colors', () {
     test('Material swatches and one-off hues clear AA on light surfaces', () {
-      // contact_ui.dart hands out raw Material colors; contacts/discovery use a
-      // hardcoded teal. The resolver has to cope with anything, which is why it
-      // is algorithmic rather than a token lookup.
+      // Call sites pass colors the palette does not own (per-contact hues, the
+      // sensor teal), which is why the resolver is algorithmic rather than a
+      // token lookup.
       const arbitrary = <Color>[
-        Color(0xFF4ACCC4), // sensor teal
+        MeshPalette.teal,
         Color(0xFF8FA8F0), // avatar pastel
         Color(0xFF6FD9CE), // avatar pastel
         Colors.blue,

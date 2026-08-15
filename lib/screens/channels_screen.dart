@@ -1857,9 +1857,9 @@ class _ChannelsScreenState extends State<ChannelsScreen>
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: MeshPalette.magentaBg,
-                            child: const Icon(
+                            child: Icon(
                               Icons.groups,
-                              color: MeshPalette.magenta,
+                              color: MeshTheme.accent(context, MeshPalette.magenta),
                             ),
                           ),
                           title: Text(community.name),

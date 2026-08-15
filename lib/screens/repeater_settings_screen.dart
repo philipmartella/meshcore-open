@@ -2167,28 +2167,30 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.warning, color: MeshPalette.alert),
+              Icon(Icons.warning, color: MeshTheme.accent(context, MeshPalette.alert)),
               const SizedBox(width: 8),
               Text(
                 l10n.repeater_dangerZone,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: MeshPalette.alert,
+                  color: MeshTheme.accent(context, MeshPalette.alert),
                 ),
               ),
             ],
           ),
           const Divider(height: 20, color: MeshPalette.alertLine),
           ListTile(
-            leading: const Icon(Icons.refresh, color: MeshPalette.alert),
+            leading: Icon(Icons.refresh, color: MeshTheme.accent(context, MeshPalette.alert)),
             title: Text(
               l10n.repeater_rebootRepeater,
-              style: const TextStyle(color: MeshPalette.alert),
+              style: TextStyle(color: MeshTheme.accent(context, MeshPalette.alert)),
             ),
             subtitle: Text(
               l10n.repeater_rebootRepeaterSubtitle,
-              style: const TextStyle(color: MeshPalette.warnDim),
+              style: TextStyle(
+                color: MeshTheme.accent(context, MeshPalette.warnDim),
+              ),
             ),
             onTap: () => _confirmAction(
               l10n.repeater_rebootRepeater,
@@ -2199,14 +2201,16 @@ class _RepeaterSettingsScreenState extends State<RepeaterSettingsScreen> {
           ),
           // Regenerate identity key - hidden until fully implemented
           ListTile(
-            leading: const Icon(Icons.delete_forever, color: MeshPalette.alert),
+            leading: Icon(Icons.delete_forever, color: MeshTheme.accent(context, MeshPalette.alert)),
             title: Text(
               l10n.repeater_eraseFileSystem,
-              style: const TextStyle(color: MeshPalette.alert),
+              style: TextStyle(color: MeshTheme.accent(context, MeshPalette.alert)),
             ),
             subtitle: Text(
               l10n.repeater_eraseFileSystemSubtitle,
-              style: const TextStyle(color: MeshPalette.warnDim),
+              style: TextStyle(
+                color: MeshTheme.accent(context, MeshPalette.warnDim),
+              ),
             ),
             onTap: () => _confirmAction(
               l10n.repeater_eraseFileSystem,

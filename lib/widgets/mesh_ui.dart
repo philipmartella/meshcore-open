@@ -327,7 +327,7 @@ class SignalBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = MeshTheme.snrColor(snr, blocked: false);
+    final color = MeshTheme.snrColor(snr, blocked: false, scheme: scheme);
     final active = snr == null
         ? 0
         : snr! > 0

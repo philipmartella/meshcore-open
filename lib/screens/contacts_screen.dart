@@ -1360,7 +1360,7 @@ class _ContactsScreenState extends State<ContactsScreen>
             ),
             if (isRepeater) ...[
               ListTile(
-                leading: Icon(Icons.radar, color: MeshPalette.signal),
+                leading: Icon(Icons.radar, color: MeshTheme.accent(context, MeshPalette.signal)),
                 title: Text(context.l10n.contacts_ping),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1384,7 +1384,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                 },
               ),
               ListTile(
-                leading: Icon(Icons.cell_tower, color: MeshPalette.warn),
+                leading: Icon(Icons.cell_tower, color: MeshTheme.accent(context, MeshPalette.warn)),
                 title: Text(context.l10n.contacts_manageRepeater),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1393,7 +1393,7 @@ class _ContactsScreenState extends State<ContactsScreen>
               ),
             ] else if (isRoom) ...[
               ListTile(
-                leading: Icon(Icons.radar, color: MeshPalette.signal),
+                leading: Icon(Icons.radar, color: MeshTheme.accent(context, MeshPalette.signal)),
                 title: Text(context.l10n.contacts_pathTrace),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1419,7 +1419,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                 },
               ),
               ListTile(
-                leading: Icon(Icons.meeting_room, color: MeshPalette.blue),
+                leading: Icon(Icons.meeting_room, color: MeshTheme.accent(context, MeshPalette.blue)),
                 title: Text(context.l10n.contacts_roomLogin),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1427,7 +1427,7 @@ class _ContactsScreenState extends State<ContactsScreen>
                 },
               ),
               ListTile(
-                leading: Icon(Icons.room_preferences, color: MeshPalette.warn),
+                leading: Icon(Icons.room_preferences, color: MeshTheme.accent(context, MeshPalette.warn)),
                 title: Text(context.l10n.room_management),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -1441,7 +1441,7 @@ class _ContactsScreenState extends State<ContactsScreen>
             ] else ...[
               if (contact.pathLength > 0)
                 ListTile(
-                  leading: Icon(Icons.radar, color: MeshPalette.signal),
+                  leading: Icon(Icons.radar, color: MeshTheme.accent(context, MeshPalette.signal)),
                   title: Text(context.l10n.contacts_chatTraceRoute),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -1468,7 +1468,7 @@ class _ContactsScreenState extends State<ContactsScreen>
             ListTile(
               leading: Icon(
                 isFavorite ? Icons.star : Icons.star_border,
-                color: MeshPalette.warn,
+                color: MeshTheme.accent(context, MeshPalette.warn),
               ),
               title: Text(
                 isFavorite
@@ -1588,7 +1588,7 @@ class _ContactTile extends StatelessWidget {
       case advTypeRoom:
         return MeshPalette.magenta;
       case advTypeSensor:
-        return const Color(0xFF4ACCC4); // teal
+        return MeshPalette.teal;
       default:
         return MeshPalette
             .blue; // chat — AvatarCircle handles deterministic hue
@@ -1672,7 +1672,7 @@ class _ContactTile extends StatelessWidget {
                       ),
                       if (isFavorite) ...[
                         const SizedBox(width: 4),
-                        Icon(Icons.star, size: 13, color: MeshPalette.warn),
+                        Icon(Icons.star, size: 13, color: MeshTheme.accent(context, MeshPalette.warn)),
                       ],
                       if (contact.hasLocation) ...[
                         const SizedBox(width: 4),

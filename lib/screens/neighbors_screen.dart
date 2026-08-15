@@ -370,7 +370,11 @@ class _NeighborsScreenState extends State<NeighborsScreen> {
             '<${pubKeyToHex(data['publicKey'] as Uint8List)}>',
           );
 
-    final snrColor = MeshTheme.snrColor(snr, blocked: false);
+    final snrColor = MeshTheme.snrColor(
+      snr,
+      blocked: false,
+      scheme: Theme.of(context).colorScheme,
+    );
     final heardLabel = l10n.neighbors_heardAgo(
       fmtDuration(lastHeardSeconds + 0.0),
     );

@@ -53,7 +53,10 @@ class AppBarTitle extends StatelessWidget {
                   if (showSubtitle)
                     Text(
                       selfName,
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

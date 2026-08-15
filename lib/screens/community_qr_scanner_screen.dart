@@ -196,9 +196,9 @@ class _CommunityQrScannerScreenState extends State<CommunityQrScannerScreen> {
             MeshCard(
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.groups,
-                    color: MeshPalette.magenta,
+                    color: MeshTheme.accent(context, MeshPalette.magenta),
                     size: 32,
                   ),
                   const SizedBox(width: 14),

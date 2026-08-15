@@ -43,6 +43,9 @@ class MeshPalette {
   static const blueBg = Color(0x290EA5E9);
   static const blueLine = Color(0x800EA5E9);
 
+  // Teal — sensor nodes
+  static const teal = Color(0xFF4ACCC4);
+
   // Magenta
   static const magenta = Color(0xFFDE7FDB);
   static const magentaBg = Color(0x1CDE7FDB);
@@ -225,6 +228,11 @@ class MeshTheme {
     return darken ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
   }
 
+  /// [readableOn] against the ambient surface — the common case for an accent
+  /// icon or label sitting directly on a screen.
+  static Color accent(BuildContext context, Color color) =>
+      readableOn(color, Theme.of(context).colorScheme.surface);
+
   /// A glyph color that reads on a solid [fill] — used for icons inside filled
   /// map markers, whose fill varies with the basemap.
   ///
@@ -320,6 +328,13 @@ class MeshTheme {
       onSurfaceVariant: MeshPalette.lightInk2,
       outline: MeshPalette.lightLine,
       outlineVariant: Color(0xFFD8DEE5),
+      // Set explicitly rather than falling back to the M2 baselines, so the two
+      // schemes stay symmetrical — dark() defines all of these.
+      shadow: Colors.black,
+      scrim: Colors.black54,
+      inverseSurface: MeshPalette.lightInk,
+      onInverseSurface: MeshPalette.lightBg,
+      inversePrimary: Color(0xFF9BC4EA),
     );
     return _build(scheme, Brightness.light);
   }
@@ -703,9 +718,30 @@ class MeshTheme {
   }
 
   /// Color-code an SNR value for consistency across the app.
-  static Color snrColor(num? snr, {required bool blocked}) {
+  /// Signal-quality ramp.
+  ///
+  /// Pass [scheme] wherever the result is painted on an ordinary surface so the
+  /// dark-tuned greens and ambers are resolved for the current brightness;
+  /// omitting it keeps the raw palette value for map overlays and other
+  /// deliberately dark contexts.
+  static Color snrColor(
+    num? snr, {
+    required bool blocked,
+    ColorScheme? scheme,
+  }) {
+    final raw = _rawSnrColor(snr, blocked: blocked, scheme: scheme);
+    return scheme == null ? raw : readableOn(raw, scheme.surface);
+  }
+
+  static Color _rawSnrColor(
+    num? snr, {
+    required bool blocked,
+    ColorScheme? scheme,
+  }) {
     if (blocked) return MeshPalette.alert;
-    if (snr == null) return MeshPalette.ink3;
+    // "Unknown" is chrome rather than signal, so it follows the scheme's muted
+    // ink instead of the dark palette's (1.4:1 on a light surface).
+    if (snr == null) return scheme?.onSurfaceVariant ?? MeshPalette.ink3;
     if (snr > -5) return MeshPalette.signal;
     if (snr > -12) return MeshPalette.warn;
     return MeshPalette.alert;

@@ -45,7 +45,10 @@ class DeviceTile extends StatelessWidget {
         : rssi >= -90
         ? 3
         : 4;
-    final signalUi = signalUiForStrengthTier(tier);
+    final signalUi = signalUiForStrengthTier(
+      tier,
+      scheme: Theme.of(context).colorScheme,
+    );
 
     return MeshCard(
       onTap: onTap == null
