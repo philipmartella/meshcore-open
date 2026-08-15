@@ -228,51 +228,66 @@ void showSharedNodeSheet(
   final l10n = context.l10n;
   showModalBottomSheet(
     context: context,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text(
-              title,
-              style: MeshTheme.mono(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: MeshPalette.ink,
+    // This is a themed sheet, not a floating panel over the map, so its text
+    // has to follow the scheme — the dark palette inks used to render it
+    // invisible against the light sheet background.
+    builder: (sheetContext) {
+      final scheme = Theme.of(sheetContext).colorScheme;
+      return SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text(
+                title,
+                style: MeshTheme.mono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              l10n.pathMap_sharedNodeCount(paths.length),
-              style: TextStyle(fontSize: 12, color: MeshPalette.ink3),
-            ),
-          ),
-          const SizedBox(height: 8),
-          for (final path in paths)
-            ListTile(
-              dense: true,
-              leading: _colorDot(path.color),
-              title: Text(
-                path.label,
-                style: MeshTheme.mono(fontSize: 13, color: MeshPalette.ink),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                l10n.pathMap_sharedNodeCount(paths.length),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
-              trailing: Text(
-                l10n.pathMap_hopCount(path.totalTransmissions),
-                style: MeshTheme.mono(fontSize: 11, color: MeshPalette.ink3),
-              ),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                onSelect(path);
-              },
             ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
+            const SizedBox(height: 8),
+            for (final path in paths)
+              ListTile(
+                dense: true,
+                leading: _colorDot(path.color),
+                title: Text(
+                  path.label,
+                  style: MeshTheme.mono(
+                    fontSize: 13,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                trailing: Text(
+                  l10n.pathMap_hopCount(path.totalTransmissions),
+                  style: MeshTheme.mono(
+                    fontSize: 11,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  onSelect(path);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    },
   );
 }
 

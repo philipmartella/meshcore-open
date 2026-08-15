@@ -496,7 +496,10 @@ class _LineOfSightMapScreenState extends State<LineOfSightMapScreen> {
           channelsUnreadCount: context
               .watch<MeshCoreConnector>()
               .getTotalChannelsUnreadCount(),
-          highContrast: true,
+          // Matches map_screen: the high-contrast bar is for sitting over map
+          // tiles in dark mode. Forcing it on gave light mode a near-black nav
+          // bar under a light app bar.
+          highContrast: Theme.of(context).brightness == Brightness.dark,
         ),
       ),
     );

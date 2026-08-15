@@ -103,10 +103,28 @@ class _MapScreenState extends State<MapScreen> {
   _NodeMarkersCacheKey? _nodeMarkersCacheKey;
   List<Marker> _cachedNodeMarkers = const [];
 
-  // AMPM overlay colors — deliberately distinct from node/contact markers.
-  static const Color _gpsTrackColor = Color(0xFF00B8D4); // cyan
-  static const Color _gpsTrackStartColor = Color(0xFF2E7D32); // green
-  static const Color _flockYouColor = Color(0xFFD32F2F); // red
+  // AMPM overlay colors live in MapPalette with the other marker semantics.
+  // The basemap follows the app theme, so each resolves to the variant tuned
+  // for the style actually underneath it.
+  Brightness get _basemapBrightness => Theme.of(context).brightness;
+
+  Color get _gpsTrackColor => MapPalette.forBasemap(
+    _basemapBrightness,
+    onLight: MapPalette.gpsTrackOnLight,
+    onDark: MapPalette.gpsTrackOnDark,
+  );
+
+  Color get _gpsTrackStartColor => MapPalette.forBasemap(
+    _basemapBrightness,
+    onLight: MapPalette.gpsTrackStartOnLight,
+    onDark: MapPalette.gpsTrackStartOnDark,
+  );
+
+  Color get _flockYouColor => MapPalette.forBasemap(
+    _basemapBrightness,
+    onLight: MapPalette.flockYouOnLight,
+    onDark: MapPalette.flockYouOnDark,
+  );
 
   /// If the GPS-track / FlockYou overlays were left enabled, pull their data
   /// once the first frame is up (providers are available by then). The service
@@ -152,7 +170,9 @@ class _MapScreenState extends State<MapScreen> {
             ],
           ),
           alignment: Alignment.center,
-          child: Icon(icon, color: Colors.white, size: 15),
+          // The fill flips between a deep and a bright variant with the
+          // basemap, so the glyph has to follow it.
+          child: Icon(icon, color: MeshTheme.onColor(color), size: 15),
         ),
       ),
     );
@@ -184,7 +204,11 @@ class _MapScreenState extends State<MapScreen> {
               ],
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.videocam, color: Colors.white, size: 18),
+            child: Icon(
+              Icons.videocam,
+              color: MeshTheme.onColor(_flockYouColor),
+              size: 18,
+            ),
           ),
         ),
       );
@@ -212,11 +236,13 @@ class _MapScreenState extends State<MapScreen> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Row(
+        // This dialog is an ordinary themed surface, not a map overlay, so the
+        // icon takes the scheme's error color rather than the marker fill.
+        title: Row(
           children: [
-            Icon(Icons.videocam, color: _flockYouColor),
-            SizedBox(width: 8),
-            Text('Detection'),
+            Icon(Icons.videocam, color: scheme.error),
+            const SizedBox(width: 8),
+            const Text('Detection'),
           ],
         ),
         content: Column(

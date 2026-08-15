@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/mesh_theme.dart';
+
 // showDismissibleSnackBar shows  a [SnackBar] with tap to dismiss
 // all other properties are default and optional
 void showDismissibleSnackBar(
@@ -38,12 +40,34 @@ void showDismissibleSnackBar(
   if (!isActive) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
+
+  // snackBarTheme.contentTextStyle is fixed to onSurface, which is only right
+  // for the default surface background. Callers routinely pass an error
+  // background instead, leaving near-black text on red. Re-resolve the content
+  // color against whatever background is actually being used.
+  final theme = Theme.of(context);
+  Widget body = content;
+  if (backgroundColor != null) {
+    final scheme = theme.colorScheme;
+    final onBackground = backgroundColor == scheme.error
+        ? scheme.onError
+        : MeshTheme.readableOn(scheme.onSurface, backgroundColor);
+    body = DefaultTextStyle.merge(
+      style: (theme.snackBarTheme.contentTextStyle ?? const TextStyle())
+          .copyWith(color: onBackground),
+      child: IconTheme.merge(
+        data: IconThemeData(color: onBackground),
+        child: content,
+      ),
+    );
+  }
+
   messenger.showSnackBar(
     SnackBar(
       key: key,
       content: GestureDetector(
         onTap: () => messenger.hideCurrentSnackBar(),
-        child: content,
+        child: body,
       ),
       backgroundColor: backgroundColor,
       elevation: elevation,

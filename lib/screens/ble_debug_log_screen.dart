@@ -29,15 +29,20 @@ class _BleDebugLogScreenState extends State<BleDebugLogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<BleDebugLogService>(
-      builder: (context, logService, _) {
-        final entries = logService.entries.reversed.toList();
-        final rawEntries = logService.rawLogRxEntries.reversed.toList();
-        final showingFrames = _view == _BleLogView.frames;
-        final hasEntries = showingFrames
-            ? entries.isNotEmpty
-            : rawEntries.isNotEmpty;
-        return Scaffold(
+    // Console-style frame viewer, painted entirely from the dark palette — see
+    // the note in app_debug_log_screen.dart. Keep the whole screen dark rather
+    // than mixing dark rows into a light scaffold.
+    return Theme(
+      data: MeshTheme.dark(),
+      child: Consumer<BleDebugLogService>(
+        builder: (context, logService, _) {
+          final entries = logService.entries.reversed.toList();
+          final rawEntries = logService.rawLogRxEntries.reversed.toList();
+          final showingFrames = _view == _BleLogView.frames;
+          final hasEntries = showingFrames
+              ? entries.isNotEmpty
+              : rawEntries.isNotEmpty;
+          return Scaffold(
           appBar: AppBar(
             title: AdaptiveAppBarTitle(context.l10n.debugLog_bleTitle),
             centerTitle: true,
@@ -268,8 +273,9 @@ class _BleDebugLogScreenState extends State<BleDebugLogScreen> {
               ],
             ),
           ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

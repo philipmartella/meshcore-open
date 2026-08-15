@@ -79,6 +79,26 @@ class MapPalette {
   static const sensor = Color(0xFF0F766E);
   static const shared = Color(0xFF0369A1);
 
+  /// AMPM overlays — deliberately distinct from the node/contact markers above
+  /// so a track or a camera is never mistaken for a mesh node.
+  ///
+  /// These are the one place a single color genuinely cannot serve both
+  /// basemaps: the mid-cyan that reads at 7:1 on the dark style drops to 1.9:1
+  /// on the pale one. Each therefore comes as a pair, picked by [forBasemap].
+  static const gpsTrackOnLight = Color(0xFF0E7490);
+  static const gpsTrackOnDark = Color(0xFF22D3EE);
+  static const gpsTrackStartOnLight = Color(0xFF15803D);
+  static const gpsTrackStartOnDark = Color(0xFF4ADE80);
+  static const flockYouOnLight = Color(0xFFB91C1C);
+  static const flockYouOnDark = Color(0xFFF87171);
+
+  /// Picks the variant tuned for the basemap style in use.
+  static Color forBasemap(
+    Brightness brightness, {
+    required Color onLight,
+    required Color onDark,
+  }) => brightness == Brightness.dark ? onDark : onLight;
+
   static const panelLight = Color(0xF0FFFFFF);
   static const panelDark = Color(0xF50B1220);
   static const textPrimary = Color(0xFFF8FAFC);
@@ -161,6 +181,75 @@ class MeshRadii {
 class MeshTheme {
   MeshTheme._();
 
+  /// WCAG contrast ratio between two opaque colors (1.0 – 21.0).
+  static double contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
+  /// Minimum contrast for accent text/icons. WCAG AA for normal text.
+  static const double _minAccentContrast = 4.5;
+
+  /// Returns [accent] adjusted until it is legible on [background], preserving
+  /// its hue.
+  ///
+  /// The palette's accents (`signal`, `warn`, `alert`, `magenta`, `blue`) were
+  /// picked against the near-black dark surface. Used unchanged on the light
+  /// surface they land around 2.0–2.6:1 — amber and green in particular become
+  /// nearly invisible. Rather than maintaining a parallel set of light tokens
+  /// (which could not cover the arbitrary colors call sites also pass — Material
+  /// swatches, per-contact hues), this walks lightness toward the far end until
+  /// the ratio clears AA. It is a no-op whenever the color already passes, so
+  /// dark mode is untouched.
+  static Color readableOn(
+    Color accent,
+    Color background, {
+    double minContrast = _minAccentContrast,
+  }) {
+    if (contrastRatio(accent, background) >= minContrast) return accent;
+    // Darken against a light background, lighten against a dark one.
+    final darken = background.computeLuminance() > 0.5;
+    var hsl = HSLColor.fromColor(accent);
+    for (var i = 0; i < 25; i++) {
+      final next = darken ? hsl.lightness - 0.04 : hsl.lightness + 0.04;
+      if (next <= 0.0 || next >= 1.0) break;
+      hsl = hsl.withLightness(next);
+      final candidate = hsl.toColor();
+      if (contrastRatio(candidate, background) >= minContrast) return candidate;
+    }
+    // Hue could not carry the ratio (very desaturated input) — fall back to a
+    // guaranteed-legible extreme rather than shipping unreadable text.
+    return darken ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5);
+  }
+
+  /// A glyph color that reads on a solid [fill] — used for icons inside filled
+  /// map markers, whose fill varies with the basemap.
+  ///
+  /// Picks whichever of white/near-black actually contrasts better rather than
+  /// thresholding on luminance: mid-tones like a light red sit where a naive
+  /// cutoff chooses white and lands under 3:1, while the dark ink would have
+  /// cleared 6:1.
+  static Color onColor(Color fill) {
+    const ink = Color(0xFF0B1220);
+    return contrastRatio(Colors.white, fill) >= contrastRatio(ink, fill)
+        ? Colors.white
+        : ink;
+  }
+
+  /// [readableOn] against the tinted chip/avatar fill these widgets paint —
+  /// `accent` at [tintAlpha] over the surface, not the raw surface.
+  static Color readableOnTint(
+    Color accent,
+    ColorScheme scheme, {
+    double tintAlpha = 0.12,
+  }) => readableOn(
+    accent,
+    Color.alphaBlend(accent.withValues(alpha: tintAlpha), scheme.surface),
+  );
+
   static ThemeData dark() {
     const scheme = ColorScheme.dark(
       primary: MeshPalette.blue,
@@ -175,8 +264,13 @@ class MeshTheme {
       onTertiary: Color(0xFF0B1220),
       tertiaryContainer: Color(0xFF78350F),
       onTertiaryContainer: Colors.white,
-      error: MeshPalette.alert,
-      onError: Colors.white,
+      // ColorScheme.error carries two roles: a fill that onError sits on, and
+      // error text drawn straight onto the surface. White on MeshPalette.alert
+      // was only 3.8:1, so the dark scheme follows the Material 3 convention of
+      // a lighter error with dark onError — 5.8:1 as a fill, 6.8:1 as text on
+      // the dark surface. MeshPalette.alert itself is unchanged for direct use.
+      error: Color(0xFFF87171),
+      onError: Color(0xFF450A0A),
       errorContainer: Color(0xFF7F1D1D),
       onErrorContainer: Colors.white,
       surface: MeshPalette.bg,
@@ -399,7 +493,10 @@ class MeshTheme {
             fontSize: 11.5,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             letterSpacing: 0.1,
-            color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
+            // The label sits below the indicator pill, on the bar background —
+            // not inside it — so onPrimary would be white text on a light
+            // surface. The icon above it is the part that gets onPrimary.
+            color: selected ? scheme.primary : scheme.onSurfaceVariant,
           );
         }),
         iconTheme: WidgetStateProperty.resolveWith((states) {

@@ -254,12 +254,33 @@ class _RepeaterCliScreenState extends State<RepeaterCliScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final scheme = Theme.of(context).colorScheme;
     final connector = context.watch<MeshCoreConnector>();
     final repeater = _resolveRepeater(connector);
     final isFloodMode = repeater.pathOverride == -1;
 
+    // The terminal is deliberately dark in both app themes, and the rest of
+    // this screen paints itself from the dark palette directly. Supplying the
+    // dark theme keeps the chrome consistent with that: under the light theme
+    // the AppBar took its foreground from onSurface and rendered a near-black
+    // title and icons on the near-black bar. Same approach as the LOS screen's
+    // control panel.
+    return Theme(
+      data: MeshTheme.dark(),
+      child: Builder(
+        builder: (context) =>
+            _buildScaffold(context, connector, repeater, isFloodMode),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    MeshCoreConnector connector,
+    Contact repeater,
+    bool isFloodMode,
+  ) {
+    final l10n = context.l10n;
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: MeshPalette.bg,
       appBar: AppBar(

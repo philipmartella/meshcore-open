@@ -118,20 +118,25 @@ class StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The fill is a 12% tint of the accent; drawing the accent at full strength
+    // on top of that is only legible against the dark surface it was chosen
+    // for. Resolve the foreground against the tint it actually sits on.
+    final scheme = Theme.of(context).colorScheme;
+    final ink = MeshTheme.readableOnTint(color, scheme);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(MeshRadii.pill),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: ink.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null)
-            Icon(icon, size: fontSize + 2, color: color)
+            Icon(icon, size: fontSize + 2, color: ink)
           else
-            PulseDot(color: color, size: 7, animate: pulse),
+            PulseDot(color: ink, size: 7, animate: pulse),
           const SizedBox(width: 5),
           Flexible(
             child: Text(
@@ -141,7 +146,7 @@ class StatusChip extends StatelessWidget {
               style: MeshTheme.mono(
                 fontSize: fontSize,
                 fontWeight: FontWeight.w600,
-                color: color,
+                color: ink,
               ),
             ),
           ),
@@ -173,7 +178,12 @@ class StatTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final accent = color ?? scheme.primary;
+    // Accents are dark-surface values; this icon sits on a card, so resolve it
+    // against that rather than letting amber/green wash out in light mode.
+    final accent = MeshTheme.readableOn(
+      color ?? scheme.primary,
+      scheme.surfaceContainerLow,
+    );
     return MeshCard(
       onTap: onTap,
       margin: EdgeInsets.zero,
@@ -263,6 +273,10 @@ class AvatarCircle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = color ?? _colorFor(name);
+    // Same tint-on-tint problem as StatusChip: keep the wash in the accent's
+    // own hue, but draw the glyph in a shade that actually reads on it.
+    final scheme = Theme.of(context).colorScheme;
+    final ink = MeshTheme.readableOnTint(accent, scheme, tintAlpha: 0.14);
     final initials = _initials(name);
     return Container(
       width: size,
@@ -270,17 +284,17 @@ class AvatarCircle extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: accent.withValues(alpha: 0.14),
-        border: Border.all(color: accent.withValues(alpha: 0.4)),
+        border: Border.all(color: ink.withValues(alpha: 0.4)),
       ),
       alignment: Alignment.center,
       child: icon != null
-          ? Icon(icon, size: size * 0.5, color: accent)
+          ? Icon(icon, size: size * 0.5, color: ink)
           : Text(
               initials,
               style: MeshTheme.mono(
                 fontSize: size * 0.36,
                 fontWeight: FontWeight.w700,
-                color: accent,
+                color: ink,
               ),
             ),
     );

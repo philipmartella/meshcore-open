@@ -19,9 +19,16 @@ import 'map_tile_store.dart';
 import 'pmtiles_vector_tile_provider.dart';
 import 'stored_tile_provider.dart';
 
-/// Protomaps-v4-schema style matching our PMTiles layers (earth/water/roads/
-/// buildings/…). No labels yet (avoids the glyph dependency).
-const String _vectorStyleAsset = 'assets/map/protomaps_light.json';
+/// Protomaps-v4-schema styles matching our PMTiles layers (earth/water/roads/
+/// buildings/…). No labels yet (avoids the glyph dependency). Same layer
+/// structure in both — only the colors differ, so the tiles are identical and
+/// switching themes never refetches.
+///
+/// Each file declares a distinct `"id"`: vector_tile_renderer keys its render
+/// cache on it (defaulting to `default`), so identical ids would serve
+/// light-styled tiles in dark mode.
+const String _vectorStyleLightAsset = 'assets/map/protomaps_light.json';
+const String _vectorStyleDarkAsset = 'assets/map/protomaps_dark.json';
 
 /// Filename of an optional whole-archive download — the shortcut for "give me
 /// the entire region" instead of pre-downloading area by area.
@@ -350,11 +357,23 @@ class MapTileCacheService extends ChangeNotifier {
       maximumZoom: reference?.maximumZoom ?? 15,
     );
 
-    final styleJson = await rootBundle.loadString(_vectorStyleAsset);
-    final theme = vtr.ThemeReader().read(
-      jsonDecode(styleJson) as Map<String, dynamic>,
+    // Both styles are parsed once and held together: they describe the same
+    // tiles, so picking one at paint time costs nothing, whereas rebuilding
+    // these resources on a theme switch would reconnect the archive.
+    final reader = vtr.ThemeReader();
+    final lightTheme = reader.read(
+      jsonDecode(await rootBundle.loadString(_vectorStyleLightAsset))
+          as Map<String, dynamic>,
     );
-    return _VectorResources(provider: provider, theme: theme);
+    final darkTheme = reader.read(
+      jsonDecode(await rootBundle.loadString(_vectorStyleDarkAsset))
+          as Map<String, dynamic>,
+    );
+    return _VectorResources(
+      provider: provider,
+      lightTheme: lightTheme,
+      darkTheme: darkTheme,
+    );
   }
 
   void _invalidateVector() {
@@ -391,9 +410,17 @@ class MapTileCacheService extends ChangeNotifier {
 
 class _VectorResources {
   final StoredTileProvider provider;
-  final vtr.Theme theme;
+  final vtr.Theme lightTheme;
+  final vtr.Theme darkTheme;
 
-  const _VectorResources({required this.provider, required this.theme});
+  const _VectorResources({
+    required this.provider,
+    required this.lightTheme,
+    required this.darkTheme,
+  });
+
+  vtr.Theme themeFor(Brightness brightness) =>
+      brightness == Brightness.dark ? darkTheme : lightTheme;
 }
 
 /// Renders the vector basemap once its resources (provider chain + parsed
@@ -413,8 +440,11 @@ class _VectorBasemapLayer extends StatelessWidget {
         if (snapshot.hasData) {
           final r = snapshot.data!;
           return vmt.VectorTileLayer(
+            // Keyed by brightness so a theme switch rebuilds the layer with the
+            // matching style rather than repainting the old one.
+            key: ValueKey(Theme.of(context).brightness),
             tileProviders: vmt.TileProviders({'protomaps': r.provider}),
-            theme: r.theme,
+            theme: r.themeFor(Theme.of(context).brightness),
             fileCacheMaximumSizeInBytes: _renderCacheMaxBytes,
             fileCacheTtl: const Duration(days: 7),
           );

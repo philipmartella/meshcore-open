@@ -13,12 +13,18 @@ class AppDebugLogScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AppDebugLogService>(
-      builder: (context, logService, _) {
-        final entries = logService.entries.reversed.toList();
-        final hasEntries = entries.isNotEmpty;
+    // A console-style viewer: every row, divider and label here is painted from
+    // the dark palette. Rendering that under the light theme produced a black
+    // slab of rows beneath a light app bar, with an empty state (ink3 on the
+    // light scaffold) that was invisible. Keep the whole screen dark instead.
+    return Theme(
+      data: MeshTheme.dark(),
+      child: Consumer<AppDebugLogService>(
+        builder: (context, logService, _) {
+          final entries = logService.entries.reversed.toList();
+          final hasEntries = entries.isNotEmpty;
 
-        return Scaffold(
+          return Scaffold(
           appBar: AppBar(
             title: AdaptiveAppBarTitle(context.l10n.debugLog_appTitle),
             centerTitle: true,
@@ -143,8 +149,9 @@ class AppDebugLogScreen extends StatelessWidget {
                     ),
                   ),
           ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
