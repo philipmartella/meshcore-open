@@ -121,6 +121,10 @@ class AppSettingsService extends ChangeNotifier {
     await updateSettings(_settings.copyWith(mapVectorTilesUrl: value.trim()));
   }
 
+  Future<void> setRoutingUrl(String value) async {
+    await updateSettings(_settings.copyWith(routingUrl: value.trim()));
+  }
+
   Future<void> setMapOfflineOnly(bool value) async {
     await updateSettings(_settings.copyWith(mapOfflineOnly: value));
   }

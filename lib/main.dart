@@ -23,6 +23,7 @@ import 'services/storage_service.dart';
 import 'services/message_retry_service.dart';
 import 'services/path_history_service.dart';
 import 'services/app_settings_service.dart';
+import 'services/routing_service.dart';
 import 'services/ampm_features_service.dart';
 import 'services/notification_service.dart';
 import 'services/ble_debug_log_service.dart';
@@ -81,6 +82,12 @@ void main() async {
   // AMPM fork custom features (FlockYou detector + GPS track logger). Talks the
   // 0xF0-0xF7 companion commands over the connector; feeds the map overlays.
   final ampmFeaturesService = AmpmFeaturesService(connector);
+  // Directions from the self-hosted Valhalla instance, cached in the same
+  // store the basemap uses so a known route redraws with no network.
+  final routingService = RoutingService(
+    appSettingsService: appSettingsService,
+    store: mapTileCacheService.store,
+  );
 
   // Load settings before anything reads them. The image stack below takes its
   // model registry and its "process automatically" default straight off
@@ -191,6 +198,7 @@ void main() async {
       uiViewStateService: uiViewStateService,
       timeoutPredictionService: timeoutPredictionService,
       ampmFeaturesService: ampmFeaturesService,
+      routingService: routingService,
       imageCodecService: imageCodecService,
       receivedImageStore: receivedImageStore,
       imageReassembler: imageReassembler,
@@ -327,6 +335,7 @@ class MeshCoreApp extends StatefulWidget {
   final UiViewStateService uiViewStateService;
   final TimeoutPredictionService timeoutPredictionService;
   final AmpmFeaturesService ampmFeaturesService;
+  final RoutingService routingService;
   final ImageCodecService imageCodecService;
   final ReceivedImageStore receivedImageStore;
   final ImageStreamReassembler imageReassembler;
@@ -346,6 +355,7 @@ class MeshCoreApp extends StatefulWidget {
     required this.uiViewStateService,
     required this.timeoutPredictionService,
     required this.ampmFeaturesService,
+    required this.routingService,
     required this.imageCodecService,
     required this.receivedImageStore,
     required this.imageReassembler,
@@ -422,6 +432,7 @@ class _MeshCoreAppState extends State<MeshCoreApp> with WidgetsBindingObserver {
         ChangeNotifierProvider.value(value: widget.mapTileCacheService),
         ChangeNotifierProvider.value(value: widget.timeoutPredictionService),
         ChangeNotifierProvider.value(value: widget.ampmFeaturesService),
+        ChangeNotifierProvider.value(value: widget.routingService),
         ChangeNotifierProvider.value(value: widget.imageCodecService),
         ChangeNotifierProvider.value(value: widget.receivedImageStore),
       ],
