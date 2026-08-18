@@ -1420,13 +1420,12 @@ class _MessageBubble extends StatelessWidget {
                                 style: MeshTheme.mono(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  // Per-sender hues are dark-surface values;
-                                  // resolve against the bubble they label.
-                                  color: MeshTheme.readableOn(
-                                    _colorForName(senderName),
-                                    Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerLow,
+                                  // Identity hue for this sender, built for
+                                  // the current brightness — matches the
+                                  // avatar and needs no further adjustment.
+                                  color: MeshPalette.avatarHueFor(
+                                    senderName,
+                                    Theme.of(context).brightness,
                                   ),
                                 ),
                               ),
@@ -1742,19 +1741,3 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-/// Deterministic name-to-hue mapping consistent with [AvatarCircle].
-Color _colorForName(String name) {
-  const hues = [
-    MeshPalette.blue,
-    MeshPalette.magenta,
-    MeshPalette.signal,
-    MeshPalette.warn,
-    Color(0xFF8FA8F0),
-    Color(0xFF6FD9CE),
-  ];
-  var h = 0;
-  for (final c in name.codeUnits) {
-    h = (h * 31 + c) & 0x7fffffff;
-  }
-  return hues[h % hues.length];
-}

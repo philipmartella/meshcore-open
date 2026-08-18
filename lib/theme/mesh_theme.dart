@@ -56,6 +56,49 @@ class MeshPalette {
   static const meBorder = Color(0xFF0369A1);
   static const meInk = Color(0xFFF0F9FF);
 
+  /// Per-name identity hues for avatars and chat sender labels.
+  ///
+  /// Two hand-picked sets rather than one set run through the contrast
+  /// resolver: darkening a color toward AA pulls it up the lightness axis, and
+  /// hues that started close — the greens, teals and blues of the old list —
+  /// converge until two people's avatars look the same. These are spaced at
+  /// least 49° apart in hue and each clears 4.5:1 both on the 14% tint an
+  /// avatar paints and on the chat bubble a sender label sits on.
+  ///
+  /// Identity is positional: index N must mean the same person in both sets, so
+  /// the two lists stay the same length and order.
+  static const avatarHuesDark = <Color>[
+    Color(0xFFE8703E), // rust
+    Color(0xFFB5D94A), // lime
+    Color(0xFF48DC78), // green
+    Color(0xFF45C0DD), // sky
+    Color(0xFF9A86EC), // indigo
+    Color(0xFFE45FC7), // violet
+  ];
+
+  static const avatarHuesLight = <Color>[
+    Color(0xFFA1471C), // rust
+    Color(0xFF5C6813), // moss
+    Color(0xFF12722F), // green
+    Color(0xFF156C81), // sky
+    Color(0xFF4B32C4), // indigo
+    Color(0xFFA82590), // violet
+  ];
+
+  static List<Color> avatarHues(Brightness brightness) =>
+      brightness == Brightness.dark ? avatarHuesDark : avatarHuesLight;
+
+  /// The identity hue for [name] — stable across restarts and across themes,
+  /// since the two sets are index-aligned.
+  static Color avatarHueFor(String name, Brightness brightness) {
+    var h = 0;
+    for (final c in name.codeUnits) {
+      h = (h * 31 + c) & 0x7fffffff;
+    }
+    final hues = avatarHues(brightness);
+    return hues[h % hues.length];
+  }
+
   // ── Light variant (used when user explicitly picks light theme)
   static const lightBg = Color(0xFFF4F6F8);
   static const lightBg1 = Color(0xFFEAEEF2);

@@ -253,30 +253,24 @@ class AvatarCircle extends StatelessWidget {
     this.icon,
   });
 
-  static const _hues = [
-    MeshPalette.blue,
-    MeshPalette.magenta,
-    MeshPalette.signal,
-    MeshPalette.warn,
-    Color(0xFF8FA8F0),
-    Color(0xFF6FD9CE),
-  ];
-
-  Color _colorFor(String s) {
-    var h = 0;
-    for (final c in s.codeUnits) {
-      h = (h * 31 + c) & 0x7fffffff;
-    }
-    return _hues[h % _hues.length];
-  }
-
   @override
   Widget build(BuildContext context) {
-    final accent = color ?? _colorFor(name);
-    // Same tint-on-tint problem as StatusChip: keep the wash in the accent's
-    // own hue, but draw the glyph in a shade that actually reads on it.
-    final scheme = Theme.of(context).colorScheme;
-    final ink = MeshTheme.readableOnTint(accent, scheme, tintAlpha: 0.14);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Identity hues come from a set built for this brightness and are already
+    // legible on their own tint, so they are used as-is — running them through
+    // the contrast resolver would drag distinct hues toward each other. An
+    // explicit [color] is a semantic accent (node type) chosen against the dark
+    // surface, so that one still gets resolved.
+    final Color accent;
+    final Color ink;
+    if (color != null) {
+      accent = color!;
+      ink = MeshTheme.readableOnTint(accent, scheme, tintAlpha: 0.14);
+    } else {
+      accent = MeshPalette.avatarHueFor(name, theme.brightness);
+      ink = accent;
+    }
     final initials = _initials(name);
     return Container(
       width: size,

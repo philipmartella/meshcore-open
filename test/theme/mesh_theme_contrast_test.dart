@@ -175,6 +175,79 @@ void main() {
     });
   });
 
+  group('avatar / sender identity hues', () {
+    // Hand-picked per brightness rather than resolved, precisely so distinct
+    // people keep distinct colors. These guard the properties that buys.
+    const tintAlpha = 0.14;
+
+    double hueOf(Color c) => HSLColor.fromColor(c).hue;
+
+    for (final (mode, hues, scheme) in [
+      ('dark', MeshPalette.avatarHuesDark, dark),
+      ('light', MeshPalette.avatarHuesLight, light),
+    ]) {
+      test('$mode hues are legible on the avatar tint', () {
+        for (final h in hues) {
+          final tint = Color.alphaBlend(
+            h.withValues(alpha: tintAlpha),
+            scheme.surface,
+          );
+          expect(
+            MeshTheme.contrastRatio(h, tint),
+            greaterThanOrEqualTo(4.5),
+            reason: '$h unreadable on its own $mode avatar tint',
+          );
+        }
+      });
+
+      test('$mode hues are legible on a chat bubble', () {
+        for (final h in hues) {
+          expect(
+            MeshTheme.contrastRatio(h, scheme.surfaceContainerLow),
+            greaterThanOrEqualTo(4.5),
+            reason: '$h unreadable as a $mode sender label',
+          );
+        }
+      });
+
+      test('$mode hues stay far enough apart to tell people apart', () {
+        final sorted = hues.map(hueOf).toList()..sort();
+        for (var i = 0; i < sorted.length; i++) {
+          final gap =
+              (sorted[(i + 1) % sorted.length] - sorted[i]) % 360;
+          expect(
+            gap,
+            greaterThanOrEqualTo(40.0),
+            reason: 'two $mode identity hues are only ${gap.round()}° apart',
+          );
+        }
+      });
+    }
+
+    test('the two sets are index-aligned so identity survives a theme switch', () {
+      expect(
+        MeshPalette.avatarHuesLight.length,
+        MeshPalette.avatarHuesDark.length,
+      );
+      for (final name in ['Alice', 'bob', 'CoffeeBean 228', '', '🛰️ node']) {
+        final li = MeshPalette.avatarHuesLight.indexOf(
+          MeshPalette.avatarHueFor(name, Brightness.light),
+        );
+        final di = MeshPalette.avatarHuesDark.indexOf(
+          MeshPalette.avatarHueFor(name, Brightness.dark),
+        );
+        expect(li, di, reason: '"$name" changes identity slot across themes');
+      }
+    });
+
+    test('the hue is stable for a given name', () {
+      expect(
+        MeshPalette.avatarHueFor('CoffeeBean 228', Brightness.dark),
+        MeshPalette.avatarHueFor('CoffeeBean 228', Brightness.dark),
+      );
+    });
+  });
+
   group('readableOn handles arbitrary call-site colors', () {
     test('Material swatches and one-off hues clear AA on light surfaces', () {
       // Call sites pass colors the palette does not own (per-contact hues, the
