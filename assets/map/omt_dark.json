@@ -180,6 +180,278 @@
           ]
         }
       }
+    },
+    {
+      "id": "label_state",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "minzoom": 4,
+      "maxzoom": 9,
+      "filter": [
+        "in",
+        "class",
+        "state",
+        "province"
+      ],
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-transform": "uppercase",
+        "text-letter-spacing": 0.12,
+        "text-size": {
+          "stops": [
+            [
+              4,
+              10
+            ],
+            [
+              8,
+              13
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#8c9bb2",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "label_city",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "minzoom": 6,
+      "filter": [
+        "==",
+        "class",
+        "city"
+      ],
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-size": {
+          "stops": [
+            [
+              6,
+              11
+            ],
+            [
+              10,
+              14
+            ],
+            [
+              14,
+              17
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#c9d5e6",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.4
+      }
+    },
+    {
+      "id": "label_town",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "minzoom": 9,
+      "filter": [
+        "==",
+        "class",
+        "town"
+      ],
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-size": {
+          "stops": [
+            [
+              9,
+              10
+            ],
+            [
+              14,
+              13
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#c9d5e6",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "label_village",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "place",
+      "minzoom": 12,
+      "filter": [
+        "in",
+        "class",
+        "village",
+        "hamlet",
+        "suburb",
+        "neighbourhood"
+      ],
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-size": {
+          "stops": [
+            [
+              12,
+              9
+            ],
+            [
+              14,
+              11
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#8c9bb2",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.0
+      }
+    },
+    {
+      "id": "label_road",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "transportation_name",
+      "minzoom": 12,
+      "layout": {
+        "symbol-placement": "line",
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-size": {
+          "stops": [
+            [
+              12,
+              9
+            ],
+            [
+              16,
+              12
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#8c9bb2",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.2
+      }
+    },
+    {
+      "id": "label_water",
+      "type": "symbol",
+      "source": "openmaptiles",
+      "source-layer": "water_name",
+      "minzoom": 13,
+      "layout": {
+        "text-field": [
+          "coalesce",
+          [
+            "get",
+            "name:latin"
+          ],
+          [
+            "get",
+            "name"
+          ]
+        ],
+        "text-font": [
+          "Inter"
+        ],
+        "text-size": {
+          "stops": [
+            [
+              13,
+              9
+            ],
+            [
+              14,
+              11
+            ]
+          ]
+        }
+      },
+      "paint": {
+        "text-color": "#8c9bb2",
+        "text-halo-color": "#0b1220",
+        "text-halo-width": 1.0
+      }
     }
   ]
 }
