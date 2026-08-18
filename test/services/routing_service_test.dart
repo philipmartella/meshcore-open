@@ -50,28 +50,65 @@ void main() {
     });
   });
 
+  group('unit handling', () {
+    final milesBody = File(
+      'test/fixtures/valhalla_route_atl_cha_miles.json',
+    ).readAsStringSync();
+
+    test('an imperial response yields the same distance in metres', () {
+      // Same journey, requested in different units. Lengths arrive as 189.89
+      // and 117.99; both must normalise to the same metres, or the cache would
+      // hold two different "truths" for one road.
+      final km = RoutingService.parseResponse(body, costing: 'auto');
+      final mi = RoutingService.parseResponse(milesBody, costing: 'auto');
+      expect(mi.distanceMetres, closeTo(km.distanceMetres, 500));
+      expect(mi.distanceMetres, greaterThan(150000));
+    });
+
+    test('maneuver distances normalise too', () {
+      final km = RoutingService.parseResponse(body, costing: 'auto');
+      final mi = RoutingService.parseResponse(milesBody, costing: 'auto');
+      expect(mi.maneuvers.length, km.maneuvers.length);
+      for (var i = 0; i < km.maneuvers.length; i++) {
+        expect(
+          mi.maneuvers[i].distanceMetres,
+          closeTo(km.maneuvers[i].distanceMetres, 60),
+          reason: 'step $i disagrees between unit systems',
+        );
+      }
+    });
+
+    test('guidance prose really is unit-dependent', () {
+      // The reason units are part of the cache key rather than a display
+      // concern: the server writes distances into the text.
+      expect(body, contains('kilometers'));
+      expect(milesBody, contains('miles'));
+      expect(milesBody, isNot(contains('Continue for 5 kilometers')));
+    });
+  });
+
   group('requestHash', () {
     const atl = LatLng(33.7490, -84.3880);
     const cha = LatLng(35.0456, -85.3097);
 
     test('is stable for the same request', () {
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
       );
     });
 
     test('separates costing models', () {
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
-        isNot(RoutingService.requestHash(from: atl, to: cha, costing: 'bicycle')),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        isNot(RoutingService.requestHash(from: atl, to: cha, costing: 'bicycle', units: 'kilometers')),
       );
     });
 
     test('is direction-sensitive', () {
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
-        isNot(RoutingService.requestHash(from: cha, to: atl, costing: 'auto')),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        isNot(RoutingService.requestHash(from: cha, to: atl, costing: 'auto', units: 'kilometers')),
       );
     });
 
@@ -80,22 +117,33 @@ void main() {
       // the store with duplicates of the same journey.
       const jittered = LatLng(33.74900004, -84.38800004);
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
-        RoutingService.requestHash(from: jittered, to: cha, costing: 'auto'),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        RoutingService.requestHash(from: jittered, to: cha, costing: 'auto', units: 'kilometers'),
       );
     });
 
     test('distinguishes genuinely different places', () {
       const elsewhere = LatLng(33.7600, -84.3880);
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto'),
-        isNot(RoutingService.requestHash(from: elsewhere, to: cha, costing: 'auto')),
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        isNot(RoutingService.requestHash(from: elsewhere, to: cha, costing: 'auto', units: 'kilometers')),
+      );
+    });
+
+    test('separates unit systems', () {
+      // Valhalla writes distances into the guidance prose, so a metric route
+      // replayed under imperial would read in the wrong unit.
+      expect(
+        RoutingService.requestHash(
+            from: atl, to: cha, costing: 'auto', units: 'kilometers'),
+        isNot(RoutingService.requestHash(
+            from: atl, to: cha, costing: 'auto', units: 'miles')),
       );
     });
 
     test('is a 16-byte key', () {
       expect(
-        RoutingService.requestHash(from: atl, to: cha, costing: 'auto').length,
+        RoutingService.requestHash(from: atl, to: cha, costing: 'auto', units: 'kilometers').length,
         16,
       );
     });

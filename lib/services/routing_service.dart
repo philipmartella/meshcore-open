@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import '../models/route_result.dart';
 import '../utils/app_logger.dart';
 import '../utils/polyline_codec.dart';
+import '../utils/unit_format.dart';
 import 'app_settings_service.dart';
 import 'map_tile_store.dart';
 
@@ -21,7 +22,29 @@ import 'map_tile_store.dart';
 /// the shape stays an encoded polyline (roughly a tenth the size of coordinate
 /// pairs) and the maneuvers are gzipped JSON.
 class RoutingService extends ChangeNotifier {
-  RoutingService({required this.appSettingsService, required this.store});
+  RoutingService({required this.appSettingsService, required this.store}) {
+    _lastUnits = _units;
+    appSettingsService.addListener(_onSettingsChanged);
+  }
+
+  /// Re-runs the current route when the unit system changes.
+  ///
+  /// The summary would update on its own — it is stored in metres and formatted
+  /// at display — but the turn-by-turn text is prose the server wrote, so it
+  /// would keep saying "kilometers" until something asked again.
+  void _onSettingsChanged() {
+    final units = _units;
+    if (units == _lastUnits) return;
+    _lastUnits = units;
+    final last = _lastRequest;
+    if (last == null || _route == null) return;
+    unawaited(
+      route$(from: last.from, to: last.to, costing: last.costing),
+    );
+  }
+
+  String _lastUnits = '';
+  ({LatLng from, LatLng to, String costing})? _lastRequest;
 
   final AppSettingsService appSettingsService;
   final MapTileStore store;
@@ -40,9 +63,16 @@ class RoutingService extends ChangeNotifier {
   /// Polyline vertices for the map layer; empty when no route is shown.
   List<LatLng> get routePoints => _route?.points ?? const [];
 
+  @override
+  void dispose() {
+    appSettingsService.removeListener(_onSettingsChanged);
+    super.dispose();
+  }
+
   void clearRoute() {
     if (_route == null) return;
     _route = null;
+    _lastRequest = null;
     _lastError = null;
     notifyListeners();
   }
@@ -57,10 +87,14 @@ class RoutingService extends ChangeNotifier {
     required LatLng from,
     required LatLng to,
     required String costing,
+    required String units,
   }) {
     String e6(double v) => (v * 1e6).round().toString();
+    // Units belong in the key: Valhalla writes distances into the guidance
+    // prose ("Continue for 5 kilometers" vs "Continue for 3 miles"), so a
+    // cached metric route replayed under imperial reads wrong.
     final key =
-        '$costing|${e6(from.latitude)},${e6(from.longitude)}'
+        '$costing|$units|${e6(from.latitude)},${e6(from.longitude)}'
         '|${e6(to.latitude)},${e6(to.longitude)}';
     return Uint8List.fromList(md5.convert(utf8.encode(key)).bytes);
   }
@@ -75,11 +109,18 @@ class RoutingService extends ChangeNotifier {
     bool forceRefresh = false,
   }) async {
     if (_isRouting) return _route;
+    _lastRequest = (from: from, to: to, costing: costing);
     _isRouting = true;
     _lastError = null;
     notifyListeners();
 
-    final hash = requestHash(from: from, to: to, costing: costing);
+    final units = _units;
+    final hash = requestHash(
+      from: from,
+      to: to,
+      costing: costing,
+      units: units,
+    );
     try {
       if (!forceRefresh) {
         final cached = await _fromCache(hash);
@@ -92,6 +133,7 @@ class RoutingService extends ChangeNotifier {
         from: from,
         to: to,
         costing: costing,
+        units: units,
         hash: hash,
       );
       _route = fetched;
@@ -134,10 +176,17 @@ class RoutingService extends ChangeNotifier {
     }
   }
 
+  /// Valhalla's name for the user's unit system.
+  String get _units =>
+      UnitFormat.isImperial(appSettingsService.settings.unitSystem)
+      ? 'miles'
+      : 'kilometers';
+
   Future<RouteResult> _fromServer({
     required LatLng from,
     required LatLng to,
     required String costing,
+    required String units,
     required Uint8List hash,
   }) async {
     final base = appSettingsService.settings.routingUrl.replaceAll(
@@ -154,8 +203,9 @@ class RoutingService extends ChangeNotifier {
               {'lat': to.latitude, 'lon': to.longitude},
             ],
             'costing': costing,
-            // Metric throughout; the UI converts for display.
-            'directions_options': {'units': 'kilometers'},
+            // Asked for in the user's units so the guidance prose matches;
+            // the parser normalises lengths back to metres for storage.
+            'directions_options': {'units': units},
           }),
         )
         .timeout(_timeout);
@@ -199,6 +249,10 @@ class RoutingService extends ChangeNotifier {
   static RouteResult parseResponse(String body, {required String costing}) {
     final trip = jsonDecode(body)['trip'] as Map<String, dynamic>;
     final legs = (trip['legs'] as List).cast<Map<String, dynamic>>();
+    // Lengths come back in whatever units the request asked for, and the
+    // response says which. Trust that rather than the request, and store
+    // metres so the display can format either way.
+    final toMetres = (trip['units'] as String?) == 'miles' ? 1609.344 : 1000.0;
 
     final points = <LatLng>[];
     final maneuvers = <RouteManeuver>[];
@@ -212,8 +266,7 @@ class RoutingService extends ChangeNotifier {
         maneuvers.add(
           RouteManeuver(
             instruction: mm['instruction'] as String? ?? '',
-            // Valhalla reports leg length in the requested units (km here).
-            distanceMetres: (((mm['length'] as num?) ?? 0) * 1000).round(),
+            distanceMetres: (((mm['length'] as num?) ?? 0) * toMetres).round(),
             durationSeconds: ((mm['time'] as num?) ?? 0).round(),
             beginShapeIndex:
                 offset + (((mm['begin_shape_index'] as num?) ?? 0).toInt()),
@@ -225,7 +278,7 @@ class RoutingService extends ChangeNotifier {
     final summary = trip['summary'] as Map<String, dynamic>;
     return RouteResult(
       points: points,
-      distanceMetres: (((summary['length'] as num?) ?? 0) * 1000).round(),
+      distanceMetres: (((summary['length'] as num?) ?? 0) * toMetres).round(),
       durationSeconds: ((summary['time'] as num?) ?? 0).round(),
       maneuvers: maneuvers,
       costing: costing,

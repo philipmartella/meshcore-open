@@ -21,6 +21,7 @@ import '../l10n/contact_localization.dart';
 import '../services/ampm_features_service.dart';
 import '../models/route_result.dart';
 import '../services/routing_service.dart';
+import '../utils/unit_format.dart';
 import '../services/app_settings_service.dart';
 import '../services/path_history_service.dart';
 import '../services/map_marker_service.dart';
@@ -199,12 +200,11 @@ class _MapScreenState extends State<MapScreen> {
     final route = routing.route;
     if (route == null && !routing.isRouting) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
-
-    String fmtDuration(Duration d) {
-      final h = d.inHours;
-      final m = d.inMinutes.remainder(60);
-      return h > 0 ? '${h}h ${m}m' : '${m}m';
-    }
+    final imperial = UnitFormat.isImperial(
+      context.select<AppSettingsService, UnitSystem>(
+        (s) => s.settings.unitSystem,
+      ),
+    );
 
     return Positioned(
       left: 12,
@@ -236,8 +236,8 @@ class _MapScreenState extends State<MapScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '${route!.distanceKm.toStringAsFixed(1)} km · '
-                              '${fmtDuration(route.duration)}',
+                              '${UnitFormat.distance(route!.distanceMetres.toDouble(), imperial: imperial)}'
+                              ' · ${UnitFormat.duration(route.duration)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                               ),
@@ -278,6 +278,9 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _showManeuvers(RouteResult route) {
+    final imperial = UnitFormat.isImperial(
+      context.read<AppSettingsService>().settings.unitSystem,
+    );
     showMeshSheet(
       context,
       builder: (sheetContext) => SafeArea(
@@ -289,8 +292,9 @@ class _MapScreenState extends State<MapScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               BottomSheetHeader(
-                title: '${route.distanceKm.toStringAsFixed(1)} km · '
-                    '${route.maneuvers.length} steps',
+                title:
+                    '${UnitFormat.distance(route.distanceMetres.toDouble(), imperial: imperial)}'
+                    ' · ${route.maneuvers.length} steps',
               ),
               Flexible(
                 child: ListView.separated(
@@ -311,9 +315,10 @@ class _MapScreenState extends State<MapScreen> {
                       title: Text(m.instruction),
                       subtitle: m.distanceMetres > 0
                           ? Text(
-                              m.distanceMetres >= 1000
-                                  ? '${(m.distanceMetres / 1000).toStringAsFixed(1)} km'
-                                  : '${m.distanceMetres} m',
+                              UnitFormat.distance(
+                                m.distanceMetres.toDouble(),
+                                imperial: imperial,
+                              ),
                             )
                           : null,
                       // Tapping a step moves the map to where it happens.
