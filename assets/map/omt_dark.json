@@ -16,15 +16,6 @@
       }
     },
     {
-      "id": "ocean",
-      "type": "fill",
-      "source": "openmaptiles",
-      "source-layer": "ocean",
-      "paint": {
-        "fill-color": "#0d2740"
-      }
-    },
-    {
       "id": "landcover",
       "type": "fill",
       "source": "openmaptiles",
