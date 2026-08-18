@@ -137,6 +137,10 @@ class MapPalette {
   static const gpsTrackStartOnDark = Color(0xFF4ADE80);
   static const flockYouOnLight = Color(0xFFB91C1C);
   static const flockYouOnDark = Color(0xFFF87171);
+  // Violet: distinct from the GPS track's cyan and FlockYou's red, so three
+  // overlays can share the map without reading as one another.
+  static const routeOnLight = Color(0xFF6D28D9);
+  static const routeOnDark = Color(0xFFA78BFA);
 
   /// Picks the variant tuned for the basemap style in use.
   static Color forBasemap(

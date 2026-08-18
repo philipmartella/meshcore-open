@@ -19,6 +19,8 @@ import '../models/channel.dart';
 import '../models/contact.dart';
 import '../l10n/contact_localization.dart';
 import '../services/ampm_features_service.dart';
+import '../models/route_result.dart';
+import '../services/routing_service.dart';
 import '../services/app_settings_service.dart';
 import '../services/path_history_service.dart';
 import '../services/map_marker_service.dart';
@@ -91,6 +93,9 @@ class _MapScreenState extends State<MapScreen> {
   double _zoom = 10.0;
   String? _selectedKey;
   LatLng? _selectedGuessPos;
+  /// Explicit route origin set by long-press. Null routes from the
+  /// connected node's own position instead.
+  LatLng? _routeOrigin;
   _Freshness _freshness = _Freshness.all;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
@@ -118,6 +123,12 @@ class _MapScreenState extends State<MapScreen> {
     _basemapBrightness,
     onLight: MapPalette.gpsTrackStartOnLight,
     onDark: MapPalette.gpsTrackStartOnDark,
+  );
+
+  Color get _routeColor => MapPalette.forBasemap(
+    _basemapBrightness,
+    onLight: MapPalette.routeOnLight,
+    onDark: MapPalette.routeOnDark,
   );
 
   Color get _flockYouColor => MapPalette.forBasemap(
@@ -179,6 +190,213 @@ class _MapScreenState extends State<MapScreen> {
     return [
       pin(points.first, _gpsTrackStartColor, Icons.play_arrow),
       pin(points.last, _gpsTrackColor, Icons.flag),
+    ];
+  }
+
+  /// Summary for the drawn route: distance, time, and where it came from.
+  Widget _buildRouteCard(BuildContext context) {
+    final routing = context.watch<RoutingService>();
+    final route = routing.route;
+    if (route == null && !routing.isRouting) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+
+    String fmtDuration(Duration d) {
+      final h = d.inHours;
+      final m = d.inMinutes.remainder(60);
+      return h > 0 ? '${h}h ${m}m' : '${m}m';
+    }
+
+    return Positioned(
+      left: 12,
+      right: 12,
+      top: 12,
+      child: SafeArea(
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+            child: routing.isRouting
+                ? const Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Finding a route…'),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      Icon(Icons.directions, color: _routeColor),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${route!.distanceKm.toStringAsFixed(1)} km · '
+                              '${fmtDuration(route.duration)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '${route.maneuvers.length} steps'
+                              // Worth surfacing: it means this journey needs no
+                              // network at all.
+                              '${route.fromCache ? ' · offline' : ''}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (route.maneuvers.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.list),
+                          tooltip: 'Directions',
+                          onPressed: () => _showManeuvers(route),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Clear route',
+                        onPressed: () {
+                          context.read<RoutingService>().clearRoute();
+                          setState(() => _routeOrigin = null);
+                        },
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showManeuvers(RouteResult route) {
+    showMeshSheet(
+      context,
+      builder: (sheetContext) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              BottomSheetHeader(
+                title: '${route.distanceKm.toStringAsFixed(1)} km · '
+                    '${route.maneuvers.length} steps',
+              ),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: route.maneuvers.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final m = route.maneuvers[i];
+                    return ListTile(
+                      dense: true,
+                      leading: Text(
+                        '${i + 1}',
+                        style: MeshTheme.mono(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      title: Text(m.instruction),
+                      subtitle: m.distanceMetres > 0
+                          ? Text(
+                              m.distanceMetres >= 1000
+                                  ? '${(m.distanceMetres / 1000).toStringAsFixed(1)} km'
+                                  : '${m.distanceMetres} m',
+                            )
+                          : null,
+                      // Tapping a step moves the map to where it happens.
+                      onTap: m.beginShapeIndex < route.points.length
+                          ? () {
+                              Navigator.pop(sheetContext);
+                              _mapController.move(
+                                route.points[m.beginShapeIndex],
+                                16,
+                              );
+                            }
+                          : null,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Routes from [_routeOrigin], or from this node's own position when none
+  /// has been set.
+  Future<void> _routeTo(LatLng destination) async {
+    final routing = context.read<RoutingService>();
+    final connector = context.read<MeshCoreConnector>();
+    final origin =
+        _routeOrigin ??
+        (connector.selfLatitude != null && connector.selfLongitude != null
+            ? LatLng(connector.selfLatitude!, connector.selfLongitude!)
+            : null);
+
+    if (origin == null) {
+      showDismissibleSnackBar(
+        context,
+        content: const Text(
+          'No start point — long-press somewhere and pick "Route from here"',
+        ),
+      );
+      return;
+    }
+
+    final result = await routing.route$(from: origin, to: destination);
+    if (!mounted) return;
+    if (result == null) {
+      showDismissibleSnackBar(
+        context,
+        content: Text('Routing failed: ${routing.lastError ?? 'unknown'}'),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      );
+    }
+  }
+
+  /// Start and end pins for the drawn route.
+  List<Marker> _buildRouteMarkers(List<LatLng> points) {
+    Marker pin(LatLng p, Color color, IconData icon) => Marker(
+      point: p,
+      width: 30,
+      height: 30,
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            border: Border.all(color: MapPalette.markerOutline, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: MapPalette.markerShadow,
+                blurRadius: 5,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, color: MeshTheme.onColor(color), size: 16),
+        ),
+      ),
+    );
+    return [
+      pin(points.first, _gpsTrackStartColor, Icons.trip_origin),
+      pin(points.last, _routeColor, Icons.place),
     ];
   }
 
@@ -576,6 +794,12 @@ class _MapScreenState extends State<MapScreen> {
                 (s) => s.gpsTrackPoints,
               )
             : const <LatLng>[];
+        // Routes are transient rather than a persisted toggle: drawn when the
+        // user asks for directions, cleared when they dismiss the card.
+        final routePoints = context.select<RoutingService, List<LatLng>>(
+          (r) => r.routePoints,
+        );
+
         final flockYouDetections = settings.mapShowFlockYou
             ? context.select<AmpmFeaturesService, List<FlockYouDetection>>(
                 (s) => s.flockYouDetectionsWithLocation,
@@ -1030,6 +1254,27 @@ class _MapScreenState extends State<MapScreen> {
                       MarkerLayer(
                         markers: _buildGpsTrackEndpointMarkers(gpsTrackPoints),
                       ),
+                    if (routePoints.length >= 2)
+                      PolylineLayer(
+                        polylines: [
+                          // A casing under the route keeps it legible where it
+                          // runs along the road it was computed from.
+                          Polyline(
+                            points: routePoints,
+                            strokeWidth: 8,
+                            color: MapPalette.markerOutline.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                          Polyline(
+                            points: routePoints,
+                            strokeWidth: 5,
+                            color: _routeColor,
+                          ),
+                        ],
+                      ),
+                    if (routePoints.isNotEmpty)
+                      MarkerLayer(markers: _buildRouteMarkers(routePoints)),
                     MarkerLayer(
                       markers: [
                         if (highlightPosition != null)
@@ -1170,6 +1415,7 @@ class _MapScreenState extends State<MapScreen> {
                     pinCount: sharedMarkers.length,
                   ),
                 if (_isBuildingPathTrace) _buildPathTraceOverlay(),
+                _buildRouteCard(context),
                 if (selectedContact != null && !_isBuildingPathTrace)
                   _buildSelectedNodeCard(context, selectedContact, connector),
               ],
@@ -3282,6 +3528,28 @@ class _MapScreenState extends State<MapScreen> {
                 await connector.refreshDeviceInfo();
                 if (!mounted) return;
                 messenger.showSnackBar(SnackBar(content: Text(successMsg)));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.directions, color: _routeColor),
+              title: const Text('Directions to here'),
+              subtitle: Text(
+                _routeOrigin == null
+                    ? 'From my node'
+                    : 'From the start you set',
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _routeTo(position);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.trip_origin),
+              title: const Text('Route from here'),
+              subtitle: const Text('Use this point as the start'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                setState(() => _routeOrigin = position);
               },
             ),
             ListTile(

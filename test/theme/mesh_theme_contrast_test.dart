@@ -301,6 +301,7 @@ void main() {
         MapPalette.gpsTrackStartOnDark,
       ),
       'flockYou': (MapPalette.flockYouOnLight, MapPalette.flockYouOnDark),
+      'route': (MapPalette.routeOnLight, MapPalette.routeOnDark),
     };
 
     for (final entry in pairs.entries) {
