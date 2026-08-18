@@ -288,8 +288,9 @@ void main() {
   });
 
   group('AMPM map overlays vs the basemap they sit on', () {
-    // Sampled from assets/map/protomaps_{light,dark}.json — the largest areas
-    // an overlay is drawn over.
+    // Sampled from assets/map/omt_{light,dark}.json — the land colour, which
+    // is the largest area an overlay is drawn over (OpenMapTiles has no
+    // landmass layer, so land is the style's background).
     const lightEarth = Color(0xFFE8E6E0);
     const darkEarth = Color(0xFF131C2C);
 
