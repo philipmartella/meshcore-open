@@ -1,0 +1,194 @@
+{
+  "version": 8,
+  "id": "ampm-omt-light",
+  "name": "AMPM OpenMapTiles Light",
+  "sources": {
+    "openmaptiles": {
+      "type": "vector"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#e8e6e0"
+      }
+    },
+    {
+      "id": "ocean",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "ocean",
+      "paint": {
+        "fill-color": "#a6c8e6"
+      }
+    },
+    {
+      "id": "landcover",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landcover",
+      "paint": {
+        "fill-color": "#dfe6d8",
+        "fill-opacity": 0.55
+      }
+    },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": "#dfe6d8"
+      }
+    },
+    {
+      "id": "park",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "park",
+      "minzoom": 11,
+      "paint": {
+        "fill-color": "#d9e6d2",
+        "fill-opacity": 0.7
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a6c8e6"
+      }
+    },
+    {
+      "id": "roads_casing",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "minzoom": 10,
+      "paint": {
+        "line-color": "#d8d2c6",
+        "line-width": {
+          "stops": [
+            [
+              10,
+              1.2
+            ],
+            [
+              14,
+              3.2
+            ],
+            [
+              17,
+              9.0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "roads_minor",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "minzoom": 11,
+      "filter": [
+        "in",
+        "class",
+        "secondary",
+        "tertiary",
+        "minor",
+        "service"
+      ],
+      "paint": {
+        "line-color": "#f7f5f0",
+        "line-width": {
+          "stops": [
+            [
+              11,
+              0.5
+            ],
+            [
+              14,
+              1.6
+            ],
+            [
+              17,
+              5.0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "roads_major",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        "class",
+        "motorway",
+        "trunk",
+        "primary"
+      ],
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": {
+          "stops": [
+            [
+              5,
+              0.5
+            ],
+            [
+              10,
+              1.6
+            ],
+            [
+              14,
+              3.0
+            ],
+            [
+              17,
+              7.0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "buildings",
+      "type": "fill",
+      "source": "openmaptiles",
+      "source-layer": "building",
+      "minzoom": 14,
+      "paint": {
+        "fill-color": "#dedbd2"
+      }
+    },
+    {
+      "id": "boundaries",
+      "type": "line",
+      "source": "openmaptiles",
+      "source-layer": "boundary",
+      "paint": {
+        "line-color": "#a89fb0",
+        "line-width": {
+          "stops": [
+            [
+              4,
+              0.5
+            ],
+            [
+              10,
+              1.2
+            ]
+          ]
+        }
+      }
+    }
+  ]
+}

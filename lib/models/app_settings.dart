@@ -198,7 +198,7 @@ class AppSettings {
     this.mapShowFlockYou = false,
     this.enableMessageTracing = true,
     this.mapVectorTilesUrl =
-        'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
+        'https://tiles.martellaville.net/tiles/us-south.pmtiles',
     this.mapOfflineOnly = false,
     this.mapLastCenterLat,
     this.mapLastCenterLon,
@@ -353,7 +353,7 @@ class AppSettings {
       enableMessageTracing: json['enable_message_tracing'] as bool? ?? true,
       mapVectorTilesUrl:
           json['map_vector_tiles_url'] as String? ??
-          'https://tomahawk.martellaville.net:8443/tiles/se10-z15.pmtiles',
+          'https://tiles.martellaville.net/tiles/us-south.pmtiles',
       mapOfflineOnly: json['map_offline_only'] as bool? ?? false,
       mapLastCenterLat: (json['map_last_center_lat'] as num?)?.toDouble(),
       mapLastCenterLon: (json['map_last_center_lon'] as num?)?.toDouble(),

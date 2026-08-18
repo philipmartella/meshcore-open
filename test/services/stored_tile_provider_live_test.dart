@@ -11,8 +11,10 @@ import 'package:vector_map_tiles/vector_map_tiles.dart';
 ///
 /// Skipped automatically when the local tiles stack is not running, so this
 /// stays safe in CI; run `docker compose up -d` in srv/tiles-meshcore to
-/// exercise it.
-const String _tilesUrl = 'http://localhost:8088/tiles/se10-z15.pmtiles';
+/// exercise it, and produce the archive with srv/geo/tilemaker.
+// Loopback bind on the tileserver stack — no DNS or SNI override needed. See
+// srv/geo/tileserver/compose.yml.
+const String _tilesUrl = 'http://localhost:8088/tiles/us-south.pmtiles';
 
 Future<bool> _serverUp() async {
   try {

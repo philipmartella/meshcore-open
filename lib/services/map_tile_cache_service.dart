@@ -19,16 +19,25 @@ import 'map_tile_store.dart';
 import 'pmtiles_vector_tile_provider.dart';
 import 'stored_tile_provider.dart';
 
-/// Protomaps-v4-schema styles matching our PMTiles layers (earth/water/roads/
-/// buildings/…). No labels yet (avoids the glyph dependency). Same layer
-/// structure in both — only the colors differ, so the tiles are identical and
-/// switching themes never refetches.
+/// OpenMapTiles-schema styles matching what tilemaker produces from the OSM
+/// extract (ocean/water/transportation/building/…). No labels yet (avoids the
+/// glyph dependency). Same layer structure in both — only the colors differ, so
+/// the tiles are identical and switching themes never refetches.
+///
+/// Note there is no `earth` layer in this schema as there was in Protomaps v4:
+/// land is the background color, and sea is painted over it from `ocean`, which
+/// tilemaker derives from a coastline shapefile rather than from OSM.
 ///
 /// Each file declares a distinct `"id"`: vector_tile_renderer keys its render
 /// cache on it (defaulting to `default`), so identical ids would serve
 /// light-styled tiles in dark mode.
-const String _vectorStyleLightAsset = 'assets/map/protomaps_light.json';
-const String _vectorStyleDarkAsset = 'assets/map/protomaps_dark.json';
+const String _vectorStyleLightAsset = 'assets/map/omt_light.json';
+const String _vectorStyleDarkAsset = 'assets/map/omt_dark.json';
+
+/// Source name the styles declare, and therefore the key the provider must be
+/// registered under. These have to agree: a mismatch renders an empty map with
+/// no error, because every layer references a source that does not exist.
+const String _vectorSourceName = 'openmaptiles';
 
 /// Filename of an optional whole-archive download — the shortcut for "give me
 /// the entire region" instead of pre-downloading area by area.
@@ -443,7 +452,7 @@ class _VectorBasemapLayer extends StatelessWidget {
             // Keyed by brightness so a theme switch rebuilds the layer with the
             // matching style rather than repainting the old one.
             key: ValueKey(Theme.of(context).brightness),
-            tileProviders: vmt.TileProviders({'protomaps': r.provider}),
+            tileProviders: vmt.TileProviders({_vectorSourceName: r.provider}),
             theme: r.themeFor(Theme.of(context).brightness),
             fileCacheMaximumSizeInBytes: _renderCacheMaxBytes,
             fileCacheTtl: const Duration(days: 7),
