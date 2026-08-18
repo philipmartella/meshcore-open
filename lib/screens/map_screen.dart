@@ -1256,6 +1256,11 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                     if (routePoints.length >= 2)
                       PolylineLayer(
+                        // This layer draws the route twice (casing + line), so
+                        // it pays for its geometry twice over. 1px against the
+                        // 0.3px default is imperceptible on a road-following
+                        // line but meaningfully less to rasterize.
+                        simplificationTolerance: 1,
                         polylines: [
                           // A casing under the route keeps it legible where it
                           // runs along the road it was computed from.
