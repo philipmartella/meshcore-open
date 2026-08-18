@@ -24,12 +24,89 @@ void main() {
     setUp(() async {
       tmp = await Directory.systemTemp.createTemp('tile_store_test');
       store = MapTileStore();
-      await store.open(tmp.path);
+      await store.open(tmp.path, sourceUrl: 'https://a.example/a.pmtiles');
     });
 
     tearDown(() async {
       await store.close();
       await tmp.delete(recursive: true);
+    });
+
+    test('tiles from different archives never mix', () async {
+      // The bug this prevents: switching tile URLs left the store serving the
+      // previous archive's tiles under the new style. Layer names differ
+      // between schemas, so they render as nothing — silently.
+      await store.putTile(10, 5, 5, Uint8List.fromList([1, 1, 1]));
+      expect(await store.getTile(10, 5, 5), isNotNull);
+
+      await store.useSource('https://b.example/b.pmtiles');
+      expect(await store.getTile(10, 5, 5), isNull,
+          reason: 'archive B must not see archive A tiles');
+      expect(await store.tileCount(), 0);
+
+      await store.putTile(10, 5, 5, Uint8List.fromList([2, 2]));
+      expect((await store.getTile(10, 5, 5))!.length, 2);
+
+      // …and switching back finds the original untouched.
+      await store.useSource('https://a.example/a.pmtiles');
+      expect((await store.getTile(10, 5, 5))!.length, 3);
+
+      final srcs = await store.sources();
+      expect(srcs.map((s) => s.url).toSet(),
+          {'https://a.example/a.pmtiles', 'https://b.example/b.pmtiles'});
+      expect(srcs.every((s) => s.tiles == 1), isTrue);
+    });
+
+    test('deleteSource drops only that archive', () async {
+      await store.putTile(9, 1, 1, Uint8List.fromList([1]));
+      await store.useSource('https://b.example/b.pmtiles');
+      await store.putTile(9, 1, 1, Uint8List.fromList([2]));
+      final b = (await store.sources()).firstWhere((s) => s.url.contains('b.'));
+
+      await store.deleteSource(b.id);
+      await store.useSource('https://a.example/a.pmtiles');
+      expect(await store.getTile(9, 1, 1), isNotNull,
+          reason: 'archive A survives deletion of B');
+      expect((await store.sources()).length, 1);
+    });
+
+    test('route cache round-trips and keys on the request hash', () async {
+      final hash = Uint8List.fromList(List.generate(16, (i) => i));
+      await store.putRoute(
+        requestHash: hash,
+        costing: 'auto',
+        fromLat: 34.123456, fromLon: -85.654321,
+        toLat: 33.7, toLon: -84.4,
+        distanceMetres: 143000,
+        durationSeconds: 5400,
+        shape: '}~kkExyz|N??_pR',
+        maneuvers: Uint8List.fromList([0x1f, 0x8b, 1, 2, 3]),
+      );
+
+      final got = await store.getRoute(hash);
+      expect(got, isNotNull);
+      expect(got!.costing, 'auto');
+      expect(got.shape, '}~kkExyz|N??_pR');
+      expect(got.distanceMetres, 143000);
+      expect(got.maneuvers, isNotNull);
+      // e6 round-trip keeps the precision the firmware records at.
+      expect(got.fromLat, closeTo(34.123456, 1e-6));
+      expect(got.fromLon, closeTo(-85.654321, 1e-6));
+
+      expect(await store.getRoute(Uint8List(16)), isNull);
+      expect((await store.routeStats()).count, 1);
+    });
+
+    test('routes survive a source switch', () async {
+      // Routes are not tied to a basemap archive.
+      final hash = Uint8List.fromList(List.filled(16, 7));
+      await store.putRoute(
+        requestHash: hash, costing: 'bicycle',
+        fromLat: 1, fromLon: 2, toLat: 3, toLon: 4,
+        distanceMetres: 10, durationSeconds: 20, shape: 'abc',
+      );
+      await store.useSource('https://b.example/b.pmtiles');
+      expect(await store.getRoute(hash), isNotNull);
     });
 
     test('opens in WAL mode so readers never block the writer', () async {

@@ -25,13 +25,25 @@ import '../models/map_region.dart';
 /// read.
 class MapTileStore {
   static const String _dbFileName = 'basemap_tiles.mbtiles';
-  static const int _schemaVersion = 1;
+  static const int _schemaVersion = 2;
 
   Database? _db;
 
+  /// Row id of the archive tiles are currently read from and written to.
+  int _sourceId = 0;
+  int get sourceId => _sourceId;
+
   /// Opens (creating if needed) the store under [directoryPath].
-  Future<void> open(String directoryPath) async {
-    if (_db != null) return;
+  ///
+  /// [sourceUrl] identifies the archive in use. Tiles are scoped to it, so
+  /// switching archives cannot serve one schema's tiles under another's style —
+  /// which is otherwise silent, since an unmatched source-layer renders as
+  /// absence rather than an error.
+  Future<void> open(String directoryPath, {String? sourceUrl}) async {
+    if (_db != null) {
+      if (sourceUrl != null) await useSource(sourceUrl);
+      return;
+    }
     _db = await openDatabase(
       '$directoryPath/$_dbFileName',
       version: _schemaVersion,
@@ -48,43 +60,177 @@ class MapTileStore {
         // resumable tile download simply means refetching a few tiles.
         await db.execute('PRAGMA synchronous=NORMAL');
       },
+      onUpgrade: (db, from, to) async {
+        if (from < 2) await _createV2(db, dropLegacyTiles: true);
+      },
       onCreate: (db, version) async {
-        // MBTiles core.
-        await db.execute('''
-          CREATE TABLE tiles (
-            zoom_level  INTEGER NOT NULL,
-            tile_column INTEGER NOT NULL,
-            tile_row    INTEGER NOT NULL,
-            tile_data   BLOB    NOT NULL,
-            fetched_at  INTEGER NOT NULL,
-            PRIMARY KEY (zoom_level, tile_column, tile_row)
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE metadata (name TEXT PRIMARY KEY, value TEXT)
-        ''');
-        // Our own bookkeeping for pre-downloaded areas.
-        await db.execute('''
-          CREATE TABLE regions (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            name       TEXT    NOT NULL,
-            west       REAL    NOT NULL,
-            south      REAL    NOT NULL,
-            east       REAL    NOT NULL,
-            north      REAL    NOT NULL,
-            min_zoom   INTEGER NOT NULL,
-            max_zoom   INTEGER NOT NULL,
-            tile_count INTEGER NOT NULL DEFAULT 0,
-            bytes      INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            complete   INTEGER NOT NULL DEFAULT 0
-          )
-        ''');
-        await db.insert('metadata', {'name': 'name', 'value': 'MeshCore Open basemap'});
-        await db.insert('metadata', {'name': 'format', 'value': 'pbf'});
-        await db.insert('metadata', {'name': 'type', 'value': 'baselayer'});
+        await _createV2(db, dropLegacyTiles: false);
       },
     );
+    if (sourceUrl != null) await useSource(sourceUrl);
+  }
+
+  /// Schema v2: tiles scoped to a source, plus the route cache.
+  ///
+  /// Storage notes — these are all rowid tables. A `WITHOUT ROWID` table stores
+  /// whole rows in the primary-key btree, which SQLite recommends only for
+  /// small rows; measured on real data our ~17 KB tiles came out 5 MB *larger*
+  /// that way, because they spill to overflow pages.
+  static Future<void> _createV2(
+    Database db, {
+    required bool dropLegacyTiles,
+  }) async {
+    if (dropLegacyTiles) {
+      // v1 tiles carry no record of which archive produced them. Attributing
+      // them to the current source would be a guess, and a wrong guess
+      // reintroduces exactly the schema-mixing this table exists to prevent —
+      // so they go. They refetch by browsing.
+      await db.execute('DROP TABLE IF EXISTS tiles');
+      await db.execute('DROP TABLE IF EXISTS regions');
+    }
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS sources (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        url        TEXT    NOT NULL UNIQUE,
+        first_seen INTEGER NOT NULL,
+        last_used  INTEGER NOT NULL
+      )
+    ''');
+
+    // source_id costs about a byte a row; the alternative — one table per
+    // archive — trades that for schema churn on every URL change.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS tile_data (
+        source_id   INTEGER NOT NULL,
+        zoom_level  INTEGER NOT NULL,
+        tile_column INTEGER NOT NULL,
+        tile_row    INTEGER NOT NULL,
+        tile_data   BLOB    NOT NULL,
+        fetched_at  INTEGER NOT NULL,
+        PRIMARY KEY (source_id, zoom_level, tile_column, tile_row)
+      )
+    ''');
+
+    // Keeps the file readable by MBTiles tools, which expect exactly
+    // tiles(zoom_level, tile_column, tile_row, tile_data). The view exposes
+    // whichever source is active; writes go to tile_data.
+    await db.execute('''
+      CREATE VIEW IF NOT EXISTS tiles AS
+        SELECT zoom_level, tile_column, tile_row, tile_data
+        FROM tile_data
+        WHERE source_id = (
+          SELECT CAST(value AS INTEGER) FROM metadata WHERE name = 'active_source_id'
+        )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS metadata (name TEXT PRIMARY KEY, value TEXT)
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS regions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id  INTEGER NOT NULL DEFAULT 0,
+        name       TEXT    NOT NULL,
+        west       REAL    NOT NULL,
+        south      REAL    NOT NULL,
+        east       REAL    NOT NULL,
+        north      REAL    NOT NULL,
+        min_zoom   INTEGER NOT NULL,
+        max_zoom   INTEGER NOT NULL,
+        tile_count INTEGER NOT NULL DEFAULT 0,
+        bytes      INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        complete   INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    // Cached routing responses, so a route already asked for is redrawn
+    // without touching the routing server.
+    //
+    // Storage: coordinates are integer microdegrees rather than REAL — SQLite
+    // stores a 4-byte int where a float always costs 8, and e6 is the same
+    // precision the firmware uses. `shape` stays in Valhalla's encoded-polyline
+    // form, which is the compact representation; expanding it to coordinate
+    // pairs would cost roughly ten times as much. Maneuvers are gzipped JSON.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS routes (
+        request_hash BLOB    NOT NULL UNIQUE,
+        costing      TEXT    NOT NULL,
+        from_lat_e6  INTEGER NOT NULL,
+        from_lon_e6  INTEGER NOT NULL,
+        to_lat_e6    INTEGER NOT NULL,
+        to_lon_e6    INTEGER NOT NULL,
+        distance_m   INTEGER NOT NULL,
+        duration_s   INTEGER NOT NULL,
+        shape        TEXT    NOT NULL,
+        maneuvers    BLOB,
+        created_at   INTEGER NOT NULL,
+        last_used    INTEGER NOT NULL
+      )
+    ''');
+
+    for (final e in const {
+      'name': 'MeshCore Open basemap',
+      'format': 'pbf',
+      'type': 'baselayer',
+    }.entries) {
+      await db.insert('metadata', {'name': e.key, 'value': e.value},
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  /// Selects (creating if needed) the archive tiles are scoped to.
+  Future<void> useSource(String url) async {
+    final db = _database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await db.insert('sources', {
+      'url': url,
+      'first_seen': now,
+      'last_used': now,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    final rows = await db.query('sources',
+        columns: ['id'], where: 'url = ?', whereArgs: [url], limit: 1);
+    _sourceId = rows.first['id'] as int;
+    await db.update('sources', {'last_used': now},
+        where: 'id = ?', whereArgs: [_sourceId]);
+    // Drives the MBTiles-compatibility view.
+    await db.insert('metadata',
+        {'name': 'active_source_id', 'value': '$_sourceId'},
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Every archive the store holds tiles for, with per-source totals.
+  Future<List<({int id, String url, int tiles, int bytes})>> sources() async {
+    final rows = await _database.rawQuery('''
+      SELECT s.id, s.url,
+             COUNT(t.source_id)                    AS tiles,
+             COALESCE(SUM(LENGTH(t.tile_data)), 0) AS bytes
+      FROM sources s
+      LEFT JOIN tile_data t ON t.source_id = s.id
+      GROUP BY s.id, s.url
+      ORDER BY s.last_used DESC
+    ''');
+    return [
+      for (final r in rows)
+        (
+          id: r['id'] as int,
+          url: r['url'] as String,
+          tiles: (r['tiles'] as num).toInt(),
+          bytes: (r['bytes'] as num).toInt(),
+        ),
+    ];
+  }
+
+  /// Drops everything belonging to one archive.
+  Future<void> deleteSource(int id) async {
+    await _database.transaction((txn) async {
+      await txn.delete('tile_data', where: 'source_id = ?', whereArgs: [id]);
+      await txn.delete('regions', where: 'source_id = ?', whereArgs: [id]);
+      await txn.delete('sources', where: 'id = ?', whereArgs: [id]);
+    });
+    await _vacuum();
   }
 
   Database get _database {
@@ -119,10 +265,11 @@ class MapTileStore {
   /// not refetch" rather than as data.
   Future<Uint8List?> getTile(int z, int x, int y) async {
     final rows = await _database.query(
-      'tiles',
+      'tile_data',
       columns: ['tile_data'],
-      where: 'zoom_level = ? AND tile_column = ? AND tile_row = ?',
-      whereArgs: [z, x, _tmsRow(z, y)],
+      where: 'source_id = ? AND zoom_level = ? AND tile_column = ? '
+          'AND tile_row = ?',
+      whereArgs: [_sourceId, z, x, _tmsRow(z, y)],
       limit: 1,
     );
     if (rows.isEmpty) return null;
@@ -146,12 +293,13 @@ class MapTileStore {
     TileRange range,
   ) async {
     final rows = await _database.query(
-      'tiles',
+      'tile_data',
       columns: ['tile_column', 'tile_row', 'LENGTH(tile_data) AS len'],
       where:
-          'zoom_level = ? AND tile_column BETWEEN ? AND ? '
+          'source_id = ? AND zoom_level = ? AND tile_column BETWEEN ? AND ? '
           'AND tile_row BETWEEN ? AND ?',
       whereArgs: [
+        _sourceId,
         range.z,
         range.minX,
         range.maxX,
@@ -176,10 +324,11 @@ class MapTileStore {
 
   Future<bool> hasTile(int z, int x, int y) async {
     final rows = await _database.query(
-      'tiles',
+      'tile_data',
       columns: ['1'],
-      where: 'zoom_level = ? AND tile_column = ? AND tile_row = ?',
-      whereArgs: [z, x, _tmsRow(z, y)],
+      where: 'source_id = ? AND zoom_level = ? AND tile_column = ? '
+          'AND tile_row = ?',
+      whereArgs: [_sourceId, z, x, _tmsRow(z, y)],
       limit: 1,
     );
     return rows.isNotEmpty;
@@ -187,7 +336,8 @@ class MapTileStore {
 
   /// Writes (or replaces) tile z/x/y. Pass empty [data] to record a tombstone.
   Future<void> putTile(int z, int x, int y, Uint8List data) async {
-    await _database.insert('tiles', {
+    await _database.insert('tile_data', {
+      'source_id': _sourceId,
       'zoom_level': z,
       'tile_column': x,
       'tile_row': _tmsRow(z, y),
@@ -202,7 +352,8 @@ class MapTileStore {
     final batch = _database.batch();
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final t in tiles) {
-      batch.insert('tiles', {
+      batch.insert('tile_data', {
+        'source_id': _sourceId,
         'zoom_level': t.z,
         'tile_column': t.x,
         'tile_row': _tmsRow(t.z, t.y),
@@ -216,26 +367,30 @@ class MapTileStore {
   /// Total stored tiles, including tombstones.
   Future<int> tileCount() async =>
       Sqflite.firstIntValue(
-        await _database.rawQuery('SELECT COUNT(*) FROM tiles'),
+        await _database.rawQuery(
+          'SELECT COUNT(*) FROM tile_data WHERE source_id = ?', [_sourceId]),
       ) ??
       0;
 
   /// Total bytes of tile payloads (excludes SQLite overhead).
   Future<int> totalBytes() async =>
       Sqflite.firstIntValue(
-        await _database.rawQuery('SELECT COALESCE(SUM(LENGTH(tile_data)),0) FROM tiles'),
+        await _database.rawQuery(
+          'SELECT COALESCE(SUM(LENGTH(tile_data)),0) FROM tile_data '
+          'WHERE source_id = ?', [_sourceId]),
       ) ??
       0;
 
   // ── Regions ──────────────────────────────────────────────────────────────
 
   Future<List<MapRegion>> regions() async {
-    final rows = await _database.query('regions', orderBy: 'created_at DESC');
+    final rows = await _database.query('regions',
+        where: 'source_id = ?', whereArgs: [_sourceId], orderBy: 'created_at DESC');
     return rows.map(MapRegion.fromRow).toList();
   }
 
-  Future<int> insertRegion(MapRegion region) =>
-      _database.insert('regions', region.toRow()..remove('id'));
+  Future<int> insertRegion(MapRegion region) => _database.insert(
+      'regions', region.toRow()..remove('id')..['source_id'] = _sourceId);
 
   Future<void> updateRegionProgress(
     int id, {
@@ -297,19 +452,117 @@ class MapTileStore {
           );
           args.addAll([o.minX, o.maxX, _tmsRow(z, o.maxY), _tmsRow(z, o.minY)]);
         }
-        await txn.delete('tiles', where: where.toString(), whereArgs: args);
+        await txn.delete('tile_data', where: where.toString(), whereArgs: args);
       }
       await txn.delete('regions', where: 'id = ?', whereArgs: [id]);
     });
     await _vacuum();
   }
 
-  /// Drops every tile and region.
+  /// Drops every tile and region belonging to the active source.
+  ///
+  /// Other archives in the store are untouched; use [deleteSource] for those.
   Future<void> clearAll() async {
     await _database.transaction((txn) async {
-      await txn.delete('tiles');
-      await txn.delete('regions');
+      await txn.delete(
+        'tile_data',
+        where: 'source_id = ?',
+        whereArgs: [_sourceId],
+      );
+      await txn.delete(
+        'regions',
+        where: 'source_id = ?',
+        whereArgs: [_sourceId],
+      );
     });
+    await _vacuum();
+  }
+
+  // ── Route cache ──────────────────────────────────────────────────────────
+
+  /// Stores a routing response, keyed by [requestHash] so an identical request
+  /// is answered from disk instead of the routing server.
+  ///
+  /// [maneuvers] should be gzipped JSON — turn-by-turn text compresses well and
+  /// is never queried, only replayed.
+  Future<void> putRoute({
+    required Uint8List requestHash,
+    required String costing,
+    required double fromLat,
+    required double fromLon,
+    required double toLat,
+    required double toLon,
+    required int distanceMetres,
+    required int durationSeconds,
+    required String shape,
+    Uint8List? maneuvers,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _database.insert('routes', {
+      'request_hash': requestHash,
+      'costing': costing,
+      // Microdegrees: a 4-byte int where a REAL always costs 8, at the same
+      // precision the firmware's GPS records use.
+      'from_lat_e6': (fromLat * 1e6).round(),
+      'from_lon_e6': (fromLon * 1e6).round(),
+      'to_lat_e6': (toLat * 1e6).round(),
+      'to_lon_e6': (toLon * 1e6).round(),
+      'distance_m': distanceMetres,
+      'duration_s': durationSeconds,
+      'shape': shape,
+      'maneuvers': maneuvers,
+      'created_at': now,
+      'last_used': now,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// A previously stored route, or null. Touches `last_used` so eviction can
+  /// favour routes nobody asks for.
+  Future<CachedRoute?> getRoute(Uint8List requestHash) async {
+    final rows = await _database.query(
+      'routes',
+      where: 'request_hash = ?',
+      whereArgs: [requestHash],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    await _database.update(
+      'routes',
+      {'last_used': DateTime.now().millisecondsSinceEpoch},
+      where: 'request_hash = ?',
+      whereArgs: [requestHash],
+    );
+    final r = rows.first;
+    final blob = r['maneuvers'];
+    return CachedRoute(
+      costing: r['costing'] as String,
+      fromLat: (r['from_lat_e6'] as int) / 1e6,
+      fromLon: (r['from_lon_e6'] as int) / 1e6,
+      toLat: (r['to_lat_e6'] as int) / 1e6,
+      toLon: (r['to_lon_e6'] as int) / 1e6,
+      distanceMetres: r['distance_m'] as int,
+      durationSeconds: r['duration_s'] as int,
+      shape: r['shape'] as String,
+      maneuvers: blob == null
+          ? null
+          : (blob is Uint8List ? blob : Uint8List.fromList(blob as List<int>)),
+    );
+  }
+
+  Future<({int count, int bytes})> routeStats() async {
+    final rows = await _database.rawQuery(
+      'SELECT COUNT(*) AS c, '
+      'COALESCE(SUM(LENGTH(shape) + LENGTH(COALESCE(maneuvers, x\'\'))), 0) AS b '
+      'FROM routes',
+    );
+    return (
+      count: (rows.first['c'] as num).toInt(),
+      bytes: (rows.first['b'] as num).toInt(),
+    );
+  }
+
+  Future<void> clearRoutes() async {
+    await _database.delete('routes');
     await _vacuum();
   }
 
@@ -321,4 +574,35 @@ class MapTileStore {
       // Not fatal — the space is reused on subsequent writes regardless.
     }
   }
+}
+
+/// A routing response replayed from the local cache.
+class CachedRoute {
+  final String costing;
+  final double fromLat;
+  final double fromLon;
+  final double toLat;
+  final double toLon;
+  final int distanceMetres;
+  final int durationSeconds;
+
+  /// Valhalla's encoded polyline (precision 6) — kept encoded because that is
+  /// the compact form; expanding it to coordinate pairs costs roughly ten
+  /// times as much to store.
+  final String shape;
+
+  /// Gzipped turn-by-turn JSON, or null when the caller did not ask for it.
+  final Uint8List? maneuvers;
+
+  const CachedRoute({
+    required this.costing,
+    required this.fromLat,
+    required this.fromLon,
+    required this.toLat,
+    required this.toLon,
+    required this.distanceMetres,
+    required this.durationSeconds,
+    required this.shape,
+    this.maneuvers,
+  });
 }

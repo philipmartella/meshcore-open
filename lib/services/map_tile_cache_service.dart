@@ -87,7 +87,13 @@ class MapTileCacheService extends ChangeNotifier {
       File('${(await _appSupport()).path}/$_offlineFileName');
 
   Future<void> _ensureStoreOpen() async {
-    if (!store.isOpen) await store.open((await _appSupport()).path);
+    // Passing the archive URL scopes every read and write to that source, so
+    // switching archives cannot serve one schema's tiles under another's
+    // style — a failure that renders as a blank map rather than an error.
+    await store.open(
+      (await _appSupport()).path,
+      sourceUrl: appSettingsService.settings.mapVectorTilesUrl,
+    );
   }
 
   /// Tiles held locally (including tombstones for empty cells).
@@ -395,9 +401,15 @@ class MapTileCacheService extends ChangeNotifier {
     final s = appSettingsService.settings;
     if (s.mapVectorTilesUrl != _lastUrl ||
         s.mapOfflineOnly != _lastOfflineOnly) {
+      final urlChanged = s.mapVectorTilesUrl != _lastUrl;
       _lastUrl = s.mapVectorTilesUrl;
       _lastOfflineOnly = s.mapOfflineOnly;
       _invalidateVector();
+      // Point the store at the new archive so its tiles are kept apart from
+      // the previous one's.
+      if (urlChanged && store.isOpen) {
+        unawaited(store.useSource(s.mapVectorTilesUrl));
+      }
     }
     notifyListeners();
   }
