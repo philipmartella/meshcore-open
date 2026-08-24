@@ -1493,14 +1493,21 @@ class _ChannelsScreenState extends State<ChannelsScreen>
                       ),
                       if (selectedOption == 3)
                         buildExpandedContent(_channelMessageStore)!,
-                      buildOptionCard(
-                        optionIndex: 4,
-                        icon: Icons.qr_code_scanner,
-                        title: sheetContext.l10n.community_scanQr,
-                        subtitle: sheetContext.l10n.community_join,
-                      ),
-                      if (selectedOption == 4)
-                        buildExpandedContent(_channelMessageStore)!,
+                      // Omitted where mobile_scanner has no implementation
+                      // (Windows, Linux) — the other join routes still work,
+                      // so offering a card that dead-ends is worse than not
+                      // showing it. The option indices are explicit, so
+                      // dropping this one does not renumber the rest.
+                      if (PlatformInfo.supportsQrScanning) ...[
+                        buildOptionCard(
+                          optionIndex: 4,
+                          icon: Icons.qr_code_scanner,
+                          title: sheetContext.l10n.community_scanQr,
+                          subtitle: sheetContext.l10n.community_join,
+                        ),
+                        if (selectedOption == 4)
+                          buildExpandedContent(_channelMessageStore)!,
+                      ],
                       buildOptionCard(
                         optionIndex: 5,
                         icon: Icons.groups,
@@ -1859,7 +1866,10 @@ class _ChannelsScreenState extends State<ChannelsScreen>
                             backgroundColor: MeshPalette.magentaBg,
                             child: Icon(
                               Icons.groups,
-                              color: MeshTheme.accent(context, MeshPalette.magenta),
+                              color: MeshTheme.accent(
+                                context,
+                                MeshPalette.magenta,
+                              ),
                             ),
                           ),
                           title: Text(community.name),

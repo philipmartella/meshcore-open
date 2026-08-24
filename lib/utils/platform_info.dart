@@ -41,6 +41,14 @@ class PlatformInfo {
   /// Whether the current browser supports the Web Serial backend.
   static bool get supportsWebSerial => isWeb && isChrome;
 
+  /// Whether a camera-based QR scanner is available.
+  ///
+  /// mobile_scanner ships implementations for Android, iOS, macOS and web
+  /// only. On Windows and Linux the widget builds without complaint and then
+  /// throws MissingPluginException the moment it starts the camera, so callers
+  /// have to check ahead rather than rely on MobileScanner's own errorBuilder.
+  static bool get supportsQrScanning => isAndroid || isIOS || isMacOS || isWeb;
+
   /// Whether USB serial is expected to be available on the current platform.
   static bool get supportsUsbSerial =>
       supportsNativeUsbSerial || supportsWebSerial;

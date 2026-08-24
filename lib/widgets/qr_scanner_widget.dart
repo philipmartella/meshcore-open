@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../utils/platform_info.dart';
+
 /// A reusable QR code scanner widget that can be embedded anywhere.
 ///
 /// Features:
@@ -58,7 +60,10 @@ class QrScannerWidget extends StatefulWidget {
 
 class _QrScannerWidgetState extends State<QrScannerWidget>
     with WidgetsBindingObserver {
-  late MobileScannerController _controller;
+  /// Null where mobile_scanner has no implementation — see
+  /// [PlatformInfo.supportsQrScanning]. Every camera call guards on it, and
+  /// [build] swaps in an explanatory panel instead of the camera view.
+  MobileScannerController? _controller;
   bool _hasScanned = false;
   String? _lastScannedData;
   DateTime? _lastScanTime;
@@ -67,33 +72,37 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _controller = MobileScannerController(
-      detectionSpeed: DetectionSpeed.normal,
-      facing: CameraFacing.back,
-    );
+    if (PlatformInfo.supportsQrScanning) {
+      _controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.normal,
+        facing: CameraFacing.back,
+      );
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Handle app lifecycle changes - pause/resume scanner
-    if (!_controller.value.hasCameraPermission) return;
+    final controller = _controller;
+    if (controller == null) return;
+    if (!controller.value.hasCameraPermission) return;
 
     switch (state) {
       case AppLifecycleState.resumed:
-        _controller.start();
+        controller.start();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
-        _controller.stop();
+        controller.stop();
         break;
     }
   }
@@ -129,7 +138,7 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
         setState(() {
           _hasScanned = true;
         });
-        _controller.stop();
+        _controller?.stop();
       }
 
       // Notify callback
@@ -145,16 +154,20 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
       _lastScannedData = null;
       _lastScanTime = null;
     });
-    _controller.start();
+    _controller?.start();
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = _controller;
+    if (controller == null) {
+      return _buildUnsupportedWidget(context);
+    }
     return Stack(
       children: [
         // Scanner view
         MobileScanner(
-          controller: _controller,
+          controller: controller,
           onDetect: _handleDetection,
           errorBuilder: (context, error) {
             return _buildErrorWidget(context, error);
@@ -169,7 +182,7 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
           bottom: 16,
           left: 0,
           right: 0,
-          child: _buildControls(context),
+          child: _buildControls(context, controller),
         ),
       ],
     );
@@ -228,16 +241,19 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
     );
   }
 
-  Widget _buildControls(BuildContext context) {
+  Widget _buildControls(
+    BuildContext context,
+    MobileScannerController controller,
+  ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         if (widget.showFlashButton)
           ValueListenableBuilder(
-            valueListenable: _controller,
+            valueListenable: controller,
             builder: (context, state, child) {
               return IconButton.filled(
-                onPressed: () => _controller.toggleTorch(),
+                onPressed: () => controller.toggleTorch(),
                 icon: Icon(
                   state.torchState == TorchState.on
                       ? Icons.flash_on
@@ -254,7 +270,7 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
           const SizedBox(width: 24),
         if (widget.showCameraSwitchButton)
           IconButton.filled(
-            onPressed: () => _controller.switchCamera(),
+            onPressed: () => controller.switchCamera(),
             icon: const Icon(Icons.cameraswitch),
             style: IconButton.styleFrom(
               backgroundColor: Colors.black54,
@@ -262,6 +278,31 @@ class _QrScannerWidgetState extends State<QrScannerWidget>
             ),
           ),
       ],
+    );
+  }
+
+  /// Shown in place of the camera where mobile_scanner has no implementation.
+  ///
+  /// This cannot come through [_buildErrorWidget]: with no plugin registered
+  /// the failure is a MissingPluginException thrown out of the platform
+  /// channel, not a MobileScannerException the errorBuilder ever sees.
+  Widget _buildUnsupportedWidget(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.videocam_off, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text(
+              'QR scanning is not available on this platform.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600], fontSize: 16),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

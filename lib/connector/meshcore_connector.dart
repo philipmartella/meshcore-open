@@ -59,6 +59,18 @@ import '../utils/platform_info.dart';
 import 'meshcore_uuids.dart';
 import 'meshcore_protocol.dart';
 
+/// Shown when Windows pairing could not be completed from inside the app.
+///
+/// `DeviceInformationPairing.PairAsync()` uses the default ceremony with no
+/// custom handler, and a Win32 process cannot drive the PIN prompt that a
+/// protected device demands — so for those, Settings is the only route. The
+/// bond persists once made, so this is a one-time detour.
+const String windowsBlePairingInstruction =
+    'Pair this device in Windows first: Settings > Bluetooth & devices > '
+    'Add device > Bluetooth, then enter the device PIN (123456 by default). '
+    'Close this app while pairing - Windows hides devices that another app is '
+    'already connected to.';
+
 class DirectRepeater {
   static const int maxAgeMinutes = 30; // Max age for direct repeater info
   List<int> pubkeyPrefix;
@@ -2198,6 +2210,8 @@ class MeshCoreConnector extends ChangeNotifier {
           device,
           onRequestPin: linuxPairingPinProvider,
         );
+      } else if (PlatformInfo.isWindows) {
+        await _ensureWindowsBleBond(device);
       }
 
       // Request larger MTU only where the platform path supports it.
@@ -2333,6 +2347,9 @@ class MeshCoreConnector extends ChangeNotifier {
       final lowerErrorText = errorText.toLowerCase();
       final isLinuxPairingFailure =
           PlatformInfo.isLinux && isLinuxBlePairingFailureText(errorText);
+      final isWindowsPairingFailure =
+          PlatformInfo.isWindows &&
+          errorText.contains(windowsBlePairingInstruction);
       final isLikelyPairingTimeout = isLikelyLinuxBlePairingTimeoutText(
         errorText,
       );
@@ -2340,9 +2357,18 @@ class MeshCoreConnector extends ChangeNotifier {
       final isConnectTimeoutFailure =
           isConnectFailure && lowerErrorText.contains('timed out');
       final isLinuxConnectFailure = PlatformInfo.isLinux && isConnectFailure;
-      // Linux pairing failures should not enter auto-reconnect loops; user
-      // needs to retry manually so they can re-enter PIN / resolve pairing.
-      if (isLinuxPairingFailure) {
+      // Desktop pairing failures should not enter auto-reconnect loops; the
+      // user has to retry manually so they can finish the ceremony — PIN entry
+      // on Linux, Windows Settings on Windows.
+      if (isWindowsPairingFailure) {
+        // Reconnecting cannot help: the bond has to be made in Settings, and
+        // a retry loop would only bury the instruction under repeat failures.
+        _appDebugLogService?.warn(
+          'Windows pairing required: stopping reconnect until the device is paired',
+          tag: 'BLE Connect',
+        );
+        await disconnect(manual: true);
+      } else if (isLinuxPairingFailure) {
         _appDebugLogService?.warn(
           isLikelyPairingTimeout
               ? 'Linux pairing timed out: stopping reconnect until user retries manually'
@@ -2384,7 +2410,7 @@ class MeshCoreConnector extends ChangeNotifier {
       return false;
     }
     final remoteId = device.remoteId.str;
-    final pluginBondState = await _getLinuxPluginBondState(device);
+    final pluginBondState = await _getPluginBondState(device);
     final trustedByBluez = await _linuxBlePairingService.isPairedAndTrusted(
       remoteId,
     );
@@ -2429,9 +2455,7 @@ class MeshCoreConnector extends ChangeNotifier {
     return StateError('Linux connect stage failure: $error');
   }
 
-  Future<BmBondStateEnum?> _getLinuxPluginBondState(
-    BluetoothDevice device,
-  ) async {
+  Future<BmBondStateEnum?> _getPluginBondState(BluetoothDevice device) async {
     try {
       final response = await FlutterBluePlusPlatform.instance.getBondState(
         BmBondStateRequest(remoteId: device.remoteId),
@@ -2439,11 +2463,73 @@ class MeshCoreConnector extends ChangeNotifier {
       return response.bondState;
     } catch (error) {
       _appDebugLogService?.warn(
-        'Linux getBondState unavailable for ${device.remoteId.str}: $error',
+        'getBondState unavailable for ${device.remoteId.str}: $error',
         tag: 'BLE Connect',
       );
       return null;
     }
+  }
+
+  /// Ensures Windows has bonded before the first RX write goes out.
+  ///
+  /// Windows will not bond on its own. When the peripheral answers that write
+  /// with ATT Insufficient Authentication, WinRT reports
+  /// `GattCommunicationStatus.protocolError`, which surfaces in Dart as the
+  /// opaque `writeCharacteristic | fbp-code: 2 | Write failed` — long after
+  /// connect, service discovery and setNotifyValue have all succeeded, so it
+  /// reads like anything but a pairing problem. Android's stack bonds
+  /// transparently at that point; Windows has to be asked first.
+  ///
+  /// [BluetoothDevice.createBond] refuses to run off Android, so this goes
+  /// through the platform interface directly — flutter_blue_plus_winrt does
+  /// implement createBond even though the facade will not call it.
+  Future<void> _ensureWindowsBleBond(BluetoothDevice device) async {
+    final bondState = await _getPluginBondState(device);
+    if (bondState == BmBondStateEnum.bonded) {
+      _appDebugLogService?.info(
+        'Windows BLE device already paired, skipping pairing flow',
+        tag: 'BLE Connect',
+      );
+      return;
+    }
+    if (bondState == null) {
+      // getBondState is the same channel a pair attempt would use. With it
+      // unavailable there is nothing to act on, so let the connect proceed and
+      // report whatever the firmware actually says.
+      _appDebugLogService?.warn(
+        'Windows BLE bond state unknown; attempting connect without pairing',
+        tag: 'BLE Connect',
+      );
+      return;
+    }
+
+    _appDebugLogService?.info(
+      'Windows BLE device not paired, requesting pair',
+      tag: 'BLE Connect',
+    );
+    var paired = false;
+    try {
+      // pin is required by the message but ignored by the WinRT plugin: its
+      // createBond handler reads only remote_id and hands the ceremony to
+      // Windows, which is why a PIN device needs Settings rather than us.
+      paired = await FlutterBluePlusPlatform.instance.createBond(
+        BmCreateBondRequest(remoteId: device.remoteId, pin: null),
+      );
+    } catch (error) {
+      _appDebugLogService?.warn(
+        'Windows createBond failed: $error',
+        tag: 'BLE Connect',
+      );
+    }
+
+    if (!paired &&
+        await _getPluginBondState(device) != BmBondStateEnum.bonded) {
+      throw StateError(windowsBlePairingInstruction);
+    }
+    _appDebugLogService?.info(
+      'Windows BLE pairing completed',
+      tag: 'BLE Connect',
+    );
   }
 
   Future<void> _ensureLinuxBleBond(
@@ -2453,7 +2539,7 @@ class MeshCoreConnector extends ChangeNotifier {
     final remoteId = device.remoteId.str;
     final bluetoothctlAvailable = await _linuxBlePairingService
         .isBluetoothctlAvailable();
-    final beforeBondState = await _getLinuxPluginBondState(device);
+    final beforeBondState = await _getPluginBondState(device);
     if (!bluetoothctlAvailable) {
       if (beforeBondState == BmBondStateEnum.bonded) {
         _appDebugLogService?.warn(
@@ -2528,7 +2614,7 @@ class MeshCoreConnector extends ChangeNotifier {
       throw StateError('Linux pairing fallback failed');
     }
 
-    final afterBondState = await _getLinuxPluginBondState(device);
+    final afterBondState = await _getPluginBondState(device);
     if (afterBondState != null && afterBondState != BmBondStateEnum.bonded) {
       throw StateError('Linux BLE pairing did not complete');
     } else if (afterBondState == null) {
