@@ -92,10 +92,13 @@ MeshCore Open is a cross-platform mobile application for communicating with Mesh
 **BLE on Windows needs a bond first.** Windows does not pair on its own when
 the radio demands an encrypted link — the first write is simply refused, and
 WinRT reports it as `writeCharacteristic | fbp-code: 2 | Write failed` long
-after connect and service discovery have succeeded. The app asks Windows to
-pair on connect; where the device wants a PIN, Windows will not let a desktop
-app run that prompt, so pair once through **Settings → Bluetooth & devices →
-Add device** (PIN 123456 by default) with the app closed. The bond persists.
+after connect and service discovery have succeeded, which reads like anything
+but a pairing problem. The app now asks Windows to pair as part of connecting:
+Windows raises its own PIN dialog (123456 by default), and once you confirm it
+the connection carries on into sync. The bond persists, so this happens once.
+If that dialog is declined or does not appear, pair through **Settings →
+Bluetooth & devices → Add device** with the app closed — Windows hides devices
+another app is connected to.
 
 ### Dependencies
 

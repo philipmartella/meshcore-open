@@ -61,10 +61,12 @@ import 'meshcore_protocol.dart';
 
 /// Shown when Windows pairing could not be completed from inside the app.
 ///
-/// `DeviceInformationPairing.PairAsync()` uses the default ceremony with no
-/// custom handler, and a Win32 process cannot drive the PIN prompt that a
-/// protected device demands — so for those, Settings is the only route. The
-/// bond persists once made, so this is a one-time detour.
+/// This is a fallback, not the usual path: `PairAsync()` uses the default
+/// ceremony, and Windows does put its own PIN dialog in front of the user for
+/// it — verified on Windows 11, where entering the PIN and confirming lets the
+/// connect carry straight on into sync. What is left here is the case where
+/// that ceremony is declined or unavailable, and Settings is the way through.
+/// Either way the bond persists, so it is a one-time detour.
 const String windowsBlePairingInstruction =
     'Pair this device in Windows first: Settings > Bluetooth & devices > '
     'Add device > Bluetooth, then enter the device PIN (123456 by default). '
@@ -2510,8 +2512,9 @@ class MeshCoreConnector extends ChangeNotifier {
     var paired = false;
     try {
       // pin is required by the message but ignored by the WinRT plugin: its
-      // createBond handler reads only remote_id and hands the ceremony to
-      // Windows, which is why a PIN device needs Settings rather than us.
+      // createBond handler reads only remote_id and hands the whole ceremony
+      // to Windows, which prompts for the PIN itself. Supplying one here would
+      // go nowhere.
       paired = await FlutterBluePlusPlatform.instance.createBond(
         BmCreateBondRequest(remoteId: device.remoteId, pin: null),
       );
